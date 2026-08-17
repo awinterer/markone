@@ -1,0 +1,21 @@
+# Build-Ausgaben
+bin/
+obj/
+dist/
+publish/
+
+# Visual Studio / Rider / VS Code
+.vs/
+.idea/
+*.user
+*.suo
+*.userprefs
+*.DotSettings.user
+
+# Lokale Werkzeug-Konfiguration, nicht projektbezogen
+.claude/
+
+# Sonstiges
+*.log
+Thumbs.db
+desktop.ini
