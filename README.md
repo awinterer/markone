@@ -3,8 +3,6 @@
 **Ein kleiner Markdown-Editor für Windows.** Funktionsumfang wie Windows Notepad,
 aber mit lesbarer Typografie.
 
-Von [MELTIQ](https://meltiq.at).
-
 Einspaltig und live gestylt: Du tippst Markdown, die Formatierung erscheint
 sofort. Die Markdown-Zeichen (`##`, `**`) bleiben sichtbar, treten aber in
 dezentem Grau zurück — du weißt jederzeit, was im Dokument steht.
@@ -113,7 +111,8 @@ wird hier nur als Vergleichsmaßstab genannt.
 
 ## Lizenz
 
-[Apache-2.0](LICENSE) — Copyright 2026 MELTIQ GmbH.
+[Apache-2.0](LICENSE) — Copyright 2026 Andreas Winterer.
 
-Die Lizenz erlaubt Nutzung, Änderung und Weitergabe auch kommerziell. Sie
-gewährt keine Rechte an der Marke MELTIQ.
+Die Lizenz erlaubt Nutzung, Änderung und Weitergabe auch kommerziell und
+gewährt eine ausdrückliche Patentlizenz. Rechte an Namen und Marken überträgt
+sie nicht.
