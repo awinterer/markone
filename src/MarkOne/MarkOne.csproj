@@ -9,7 +9,7 @@
     <AssemblyName>MarkOne</AssemblyName>
     <RootNamespace>MarkOne</RootNamespace>
     <ApplicationTitle>MarkOne</ApplicationTitle>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <SelfContained>false</SelfContained>
     <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>

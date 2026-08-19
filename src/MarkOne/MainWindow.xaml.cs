@@ -1,4 +1,5 @@
 using System;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -13,31 +14,72 @@ namespace MarkOne;
 
 public partial class MainWindow : Window
 {
+    public static readonly RoutedUICommand OpenFolderCommand =
+        new("Basisverzeichnis öffnen", nameof(OpenFolderCommand), typeof(MainWindow));
+    public static readonly RoutedUICommand SaveVersionCommand =
+        new("Als neue Version sichern", nameof(SaveVersionCommand), typeof(MainWindow));
+    public static readonly RoutedUICommand RefreshTreeCommand =
+        new("Navigation aktualisieren", nameof(RefreshTreeCommand), typeof(MainWindow));
+
     private static readonly Regex RxWord = new(@"[\p{L}\p{N}'’\-]+", RegexOptions.Compiled);
     private static readonly Encoding Utf8NoBom = new UTF8Encoding(false);
 
+    private readonly Settings _settings;
+    private readonly ObservableCollection<TreeNode> _roots = new();
+
     private string? _path;
     private bool _dirty;
-    private bool _suppress;          // verhindert Rekursion beim Umformatieren
+    private bool _suppress;               // verhindert Rekursion beim Umformatieren
+    private bool _suppressTreeSelection;  // verhindert Rückkopplung beim Zurücknehmen der Auswahl
+    private FileNode? _currentNode;
     private FindReplaceWindow? _finder;
+
     private readonly DispatcherTimer _countTimer;
+    private readonly DispatcherTimer _autoSaveTimer;
+    private readonly DispatcherTimer _messageTimer;
 
     public MainWindow()
     {
         InitializeComponent();
+
+        _settings = Settings.Load();
+        Width = _settings.WindowWidth;
+        Height = _settings.WindowHeight;
+        TreeColumn.Width = new GridLength(_settings.TreeWidth);
+        MenuAutoSave.IsChecked = _settings.AutoSave;
+
+        Tree.ItemsSource = _roots;
 
         DataObject.AddPastingHandler(Editor, OnPaste);
 
         _countTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
         _countTimer.Tick += (_, _) => { _countTimer.Stop(); UpdateWordCount(); };
 
+        // Absturzsicherung: kurz nach der letzten Eingabe, nicht bei jedem Zeichen.
+        _autoSaveTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+        _autoSaveTimer.Tick += (_, _) => { _autoSaveTimer.Stop(); WriteRecovery(); };
+
+        _messageTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+        _messageTimer.Tick += (_, _) => { _messageTimer.Stop(); StatusMessage.Text = ""; };
+
         SetDocumentText(string.Empty);
         UpdateTitle();
-        Loaded += (_, _) => Editor.Focus();
+
+        Loaded += OnWindowLoaded;
         Closing += OnClosing;
     }
 
-    // ---------------------------------------------------------------- Text
+    private void OnWindowLoaded(object sender, RoutedEventArgs e)
+    {
+        Editor.Focus();
+
+        if (_settings.BaseDirectory is { } dir && Directory.Exists(dir))
+            SetBaseDirectory(dir, remember: false);
+
+        OfferRecovery();
+    }
+
+    // ================================================================ Text
 
     private void SetDocumentText(string text)
     {
@@ -76,7 +118,7 @@ public partial class MainWindow : Window
         string.Join(Environment.NewLine,
             Editor.Document.Blocks.OfType<Paragraph>().Select(MarkdownStyler.GetText));
 
-    // ----------------------------------------------------------- Formatieren
+    // ========================================================= Formatieren
 
     private static bool IsFence(string text)
     {
@@ -89,7 +131,6 @@ public partial class MainWindow : Window
         var paragraphs = Editor.Document.Blocks.OfType<Paragraph>().ToList();
         if (paragraphs.Count == 0) return;
 
-        // Cursorposition merken, damit sie das Umformatieren übersteht.
         int caretIndex = -1, caretOffset = 0;
         if (Editor.CaretPosition?.Paragraph is { } cp)
         {
@@ -121,7 +162,6 @@ public partial class MainWindow : Window
         string text = MarkdownStyler.GetText(p);
         var info = p.Tag as LineInfo;
 
-        // Eine ```-Zeile verschiebt die Blockgrenzen — dann muss alles neu.
         if (IsFence(text) || (info?.IsFence ?? false))
         {
             RestyleAll();
@@ -155,9 +195,15 @@ public partial class MainWindow : Window
 
         _countTimer.Stop();
         _countTimer.Start();
+
+        if (_settings.AutoSave)
+        {
+            _autoSaveTimer.Stop();
+            _autoSaveTimer.Start();
+        }
     }
 
-    // ------------------------------------------------------------- Positionen
+    // ============================================================ Positionen
 
     private static int OffsetInParagraph(Paragraph p, TextPointer pointer) =>
         new TextRange(p.ContentStart, pointer).Text.Length;
@@ -176,7 +222,7 @@ public partial class MainWindow : Window
         return p.ContentEnd;
     }
 
-    // ---------------------------------------------------------------- Layout
+    // ================================================================ Layout
 
     private void ApplyColumnPadding()
     {
@@ -189,12 +235,31 @@ public partial class MainWindow : Window
         if (e.WidthChanged) ApplyColumnPadding();
     }
 
-    // ---------------------------------------------------------------- Eingabe
+    private void OnToggleTree(object sender, RoutedEventArgs e)
+    {
+        bool show = MenuShowTree.IsChecked;
+        TreePanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        TreeSplitter.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        TreeColumn.MinWidth = show ? 180 : 0;
+        TreeColumn.Width = show ? new GridLength(_settings.TreeWidth) : new GridLength(0);
+    }
+
+    private void OnToggleAutoSave(object sender, RoutedEventArgs e)
+    {
+        _settings.AutoSave = MenuAutoSave.IsChecked;
+        _settings.Save();
+        if (!_settings.AutoSave)
+        {
+            _autoSaveTimer.Stop();
+            Recovery.Clear(_path);
+        }
+        Flash(_settings.AutoSave ? "Autospeichern eingeschaltet" : "Autospeichern ausgeschaltet");
+    }
+
+    // ================================================================ Eingabe
 
     private void OnEditorPreviewKeyDown(object sender, KeyEventArgs e)
     {
-        // Umschalt+Enter soll ebenfalls einen echten Absatz erzeugen,
-        // sonst bricht das "eine Zeile = ein Absatz"-Modell.
         if (e.Key == Key.Return && (Keyboard.Modifiers & ModifierKeys.Shift) != 0)
         {
             e.Handled = true;
@@ -202,7 +267,6 @@ public partial class MainWindow : Window
             return;
         }
 
-        // Strg+B/I/U würden echte Rich-Text-Formatierung einfügen — hier unerwünscht.
         if ((Keyboard.Modifiers & ModifierKeys.Control) != 0 && e.Key is Key.B or Key.I or Key.U)
             e.Handled = true;
     }
@@ -223,7 +287,7 @@ public partial class MainWindow : Window
         }
     }
 
-    // ------------------------------------------------------------ Statuszeile
+    // =========================================================== Statuszeile
 
     private void UpdateWordCount()
     {
@@ -236,9 +300,130 @@ public partial class MainWindow : Window
         string name = _path is null ? "Unbenannt" : Path.GetFileName(_path);
         Title = (_dirty ? "• " : "") + name + "  —  MarkOne";
         StatusFile.Text = _path ?? "Unbenannt";
+        ButtonVersion.IsEnabled = _path is not null;
     }
 
-    // ---------------------------------------------------------------- Dateien
+    private void Flash(string message)
+    {
+        StatusMessage.Text = message;
+        _messageTimer.Stop();
+        _messageTimer.Start();
+    }
+
+    // ========================================================== Navigation
+
+    private void OnOpenFolder(object sender, ExecutedRoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFolderDialog
+        {
+            Title = "Basisverzeichnis wählen",
+            InitialDirectory = _settings.BaseDirectory ?? "",
+        };
+        if (dialog.ShowDialog(this) == true)
+            SetBaseDirectory(dialog.FolderName, remember: true);
+    }
+
+    private void SetBaseDirectory(string directory, bool remember)
+    {
+        _roots.Clear();
+        var root = new FolderNode(directory);
+        _roots.Add(root);
+        TreeHeader.Text = directory;
+
+        root.IsExpanded = true;   // löst das Einlesen im Hintergrund aus
+
+        if (remember)
+        {
+            _settings.BaseDirectory = directory;
+            _settings.Save();
+        }
+    }
+
+    private void OnRefreshTree(object sender, ExecutedRoutedEventArgs e)
+    {
+        if (_settings.BaseDirectory is { } dir && Directory.Exists(dir))
+        {
+            SetBaseDirectory(dir, remember: false);
+            Flash("Navigation aktualisiert");
+        }
+    }
+
+    private void OnTreeSelectionChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
+    {
+        if (_suppressTreeSelection) return;
+        if (e.NewValue is not FileNode node) return;
+        if (ReferenceEquals(node, _currentNode)) return;
+
+        // Bereits offene Datei erneut angeklickt: nichts tun.
+        if (_path is not null && string.Equals(node.FullPath, _path, StringComparison.OrdinalIgnoreCase))
+        {
+            _currentNode = node;
+            return;
+        }
+
+        if (!ConfirmDiscard())
+        {
+            // Abgebrochen: Auswahl im Baum zurücknehmen.
+            _suppressTreeSelection = true;
+            node.IsSelected = false;
+            if (_currentNode is not null) _currentNode.IsSelected = true;
+            _suppressTreeSelection = false;
+            return;
+        }
+
+        _currentNode = node;
+        LoadFile(node.FullPath);
+    }
+
+    /// <summary>
+    /// Hebt die Markierung im Baum auf — nötig, wenn eine Datei über das Menü
+    /// geöffnet wurde, sonst reagiert ein erneuter Klick auf den alten Eintrag nicht.
+    /// </summary>
+    private void ClearTreeSelection()
+    {
+        if (_currentNode is null) return;
+        _suppressTreeSelection = true;
+        _currentNode.IsSelected = false;
+        _suppressTreeSelection = false;
+        _currentNode = null;
+    }
+
+    /// <summary>Aktualisiert die im Baum angezeigte Überschrift nach dem Speichern.</summary>
+    private void RefreshNodeHeading()
+    {
+        if (_currentNode is null || _path is null) return;
+        FileScanner.Forget(_path);
+        _currentNode.Heading = FileScanner.ReadHeading(_path);
+    }
+
+    // ======================================================= Absturzsicherung
+
+    private void WriteRecovery()
+    {
+        if (!_settings.AutoSave || !_dirty) return;
+        Recovery.Write(_path, GetDocumentText());
+        Flash("Arbeitskopie gesichert  " + DateTime.Now.ToString("HH:mm:ss"));
+    }
+
+    private void OfferRecovery()
+    {
+        var entries = Recovery.List();
+        if (entries.Count == 0) return;
+
+        var dialog = new RecoveryWindow(entries) { Owner = this };
+        dialog.ShowDialog();
+
+        if (dialog.Restored is { } entry)
+        {
+            SetDocumentText(entry.Content);
+            _path = entry.OriginalPath;
+            _dirty = true;                 // bewusst: die Fassung steht noch nicht in der Datei
+            UpdateTitle();
+            Flash("Wiederhergestellt — noch nicht gespeichert");
+        }
+    }
+
+    // =============================================================== Dateien
 
     public void LoadFile(string path)
     {
@@ -248,6 +433,7 @@ public partial class MainWindow : Window
             SetDocumentText(text);
             _path = path;
             _dirty = false;
+            _autoSaveTimer.Stop();
             UpdateTitle();
         }
         catch (Exception ex)
@@ -262,9 +448,13 @@ public partial class MainWindow : Window
         try
         {
             File.WriteAllText(path, GetDocumentText(), Utf8NoBom);
+            Recovery.Clear(_path);
             _path = path;
             _dirty = false;
+            _autoSaveTimer.Stop();
+            Recovery.Clear(_path);
             UpdateTitle();
+            RefreshNodeHeading();
             return true;
         }
         catch (Exception ex)
@@ -275,24 +465,36 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>Fragt bei ungesicherten Änderungen nach. false = Vorgang abbrechen.</summary>
     private bool ConfirmDiscard()
     {
         if (!_dirty) return true;
 
+        string name = _path is null ? "Das neue Dokument" : Path.GetFileName(_path);
         var answer = MessageBox.Show(this,
-            "Die Änderungen wurden noch nicht gespeichert. Jetzt speichern?",
+            $"{name} wurde geändert und noch nicht gespeichert. Jetzt speichern?",
             "MarkOne", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
 
         return answer switch
         {
             MessageBoxResult.Yes => Save(),
-            MessageBoxResult.No => true,
+            MessageBoxResult.No => DiscardChanges(),
             _ => false,
         };
     }
 
-    private bool Save() => _path is not null ? SaveTo(_path) : SaveAs();
+    private bool DiscardChanges()
+    {
+        Recovery.Clear(_path);
+        return true;
+    }
+
+    private bool Save()
+    {
+        if (_path is null) return SaveAs();
+        if (!SaveTo(_path)) return false;
+        Flash("Gespeichert");
+        return true;
+    }
 
     private bool SaveAs()
     {
@@ -302,7 +504,35 @@ public partial class MainWindow : Window
             DefaultExt = ".md",
             FileName = _path is null ? "Unbenannt.md" : Path.GetFileName(_path),
         };
-        return dialog.ShowDialog(this) == true && SaveTo(dialog.FileName);
+        if (dialog.ShowDialog(this) != true) return false;
+        if (!SaveTo(dialog.FileName)) return false;
+        Flash("Gespeichert");
+        return true;
+    }
+
+    private void OnSaveVersion(object sender, ExecutedRoutedEventArgs e)
+    {
+        if (_path is null)
+        {
+            MessageBox.Show(this,
+                "Das Dokument muss zuerst einmal gespeichert werden, bevor Versionen davon abgelegt werden können.",
+                "MarkOne", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        try
+        {
+            // Erst die Datei selbst aktuell halten, dann den Zwischenstand ablegen.
+            if (_dirty && !SaveTo(_path)) return;
+
+            string created = Versioning.Save(_path, GetDocumentText());
+            Flash($"Version abgelegt: {Path.GetFileName(created)}");
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"Version konnte nicht abgelegt werden:\n\n{ex.Message}",
+                "MarkOne", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private void OnNew(object sender, ExecutedRoutedEventArgs e)
@@ -310,6 +540,7 @@ public partial class MainWindow : Window
         if (!ConfirmDiscard()) return;
         SetDocumentText(string.Empty);
         _path = null;
+        ClearTreeSelection();
         _dirty = false;
         UpdateTitle();
     }
@@ -322,7 +553,11 @@ public partial class MainWindow : Window
         {
             Filter = "Markdown (*.md;*.markdown;*.txt)|*.md;*.markdown;*.txt|Alle Dateien (*.*)|*.*",
         };
-        if (dialog.ShowDialog(this) == true) LoadFile(dialog.FileName);
+        if (dialog.ShowDialog(this) == true)
+        {
+            ClearTreeSelection();
+            LoadFile(dialog.FileName);
+        }
     }
 
     private void OnSave(object sender, ExecutedRoutedEventArgs e) => Save();
@@ -333,10 +568,24 @@ public partial class MainWindow : Window
 
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
-        if (!ConfirmDiscard()) e.Cancel = true;
+        if (!ConfirmDiscard())
+        {
+            e.Cancel = true;
+            return;
+        }
+
+        Recovery.Clear(_path);
+
+        if (WindowState == WindowState.Normal)
+        {
+            _settings.WindowWidth = Width;
+            _settings.WindowHeight = Height;
+        }
+        if (TreeColumn.Width.Value > 0) _settings.TreeWidth = TreeColumn.Width.Value;
+        _settings.Save();
     }
 
-    // ------------------------------------------------------- Suchen/Ersetzen
+    // ======================================================= Suchen/Ersetzen
 
     private void OnFind(object sender, ExecutedRoutedEventArgs e) => ShowFinder(replaceMode: false);
 
@@ -368,7 +617,6 @@ public partial class MainWindow : Window
             startOffset = OffsetInParagraph(sp, from);
         }
 
-        // Ein Durchlauf plus eine Runde extra, damit die Suche am Ende umbricht.
         for (int step = 0; step <= paragraphs.Count; step++)
         {
             int index = (startIndex + step) % paragraphs.Count;

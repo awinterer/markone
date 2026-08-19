@@ -60,6 +60,16 @@ public static class Theme
     public static readonly SolidColorBrush Rule = Frozen("#D8D3C8");
     public static readonly SolidColorBrush Selection = Frozen("#CFE0F0");
 
+    // --- Navigationsbaum -------------------------------------------------
+    public static readonly FontFamily Ui = new("Segoe UI");
+    public static readonly SolidColorBrush TreeBg = Frozen("#F7F4EE");
+    public static readonly SolidColorBrush TreeFolder = Frozen("#4A473F");
+    public static readonly SolidColorBrush TreeHeading = Frozen("#2B2A26");
+    public static readonly SolidColorBrush TreeFileName = Frozen("#9A958B");
+    public static readonly SolidColorBrush TreeNoHeading = Frozen("#B5AFA3");
+    public static readonly SolidColorBrush TreeSelected = Frozen("#E4DCCB");
+    public static readonly SolidColorBrush TreeHover = Frozen("#EDE8DE");
+
     private static SolidColorBrush Frozen(string hex)
     {
         var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)!);

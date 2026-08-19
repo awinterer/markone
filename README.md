@@ -1,7 +1,8 @@
 # MarkOne
 
-**Ein kleiner Markdown-Editor für Windows.** Funktionsumfang wie Windows Notepad,
-aber mit lesbarer Typografie.
+**Ein kleiner Markdown-Editor für Windows.** Schlank wie Notepad, aber mit
+lesbarer Typografie und einer Navigation, die deine Notizen nach Überschriften
+statt nach Dateinamen sortiert zeigt.
 
 Einspaltig und live gestylt: Du tippst Markdown, die Formatierung erscheint
 sofort. Die Markdown-Zeichen (`##`, `**`) bleiben sichtbar, treten aber in
@@ -14,7 +15,29 @@ Text darzustellen: Obsidian, Typora, Zettlr und Joplin bauen auf Electron,
 Ghostwriter auf QtWebEngine. Das kostet mehrere hundert Megabyte auf der Platte
 für eine Aufgabe, die keine braucht.
 
-MarkOne rendert nativ mit WPF. Die Anwendung ist rund **200 KB** groß.
+MarkOne rendert nativ mit WPF. Die Anwendung ist rund **250 KB** groß.
+
+## Was es kann
+
+**Navigation.** Ein Basisverzeichnis öffnen, darunter erscheinen alle
+Unterverzeichnisse und Markdown-Dateien. Jede Datei zeigt zweizeilig ihre erste
+Überschrift und darunter klein den Dateinamen. Ordner, unter denen keine
+Markdown-Datei liegt, werden ausgeblendet; `node_modules`, `.git` und
+Ähnliches übersprungen. Verzeichnisse werden erst beim Aufklappen im
+Hintergrund eingelesen, große Bäume blockieren den Start also nicht.
+
+Das zuletzt gewählte Basisverzeichnis wird gemerkt und beim nächsten Start
+wieder geöffnet.
+
+**Absturzsicherung.** Drei Sekunden nach der letzten Eingabe schreibt MarkOne
+eine Arbeitskopie nach `%APPDATA%\MarkOne\recovery\`. Die Originaldatei bleibt
+unberührt, bis du bewusst speicherst. Beim nächsten Start meldet sich ein
+Dialog mit den liegengebliebenen Fassungen. Abschaltbar unter *Ansicht*.
+
+**Versionen.** Der Knopf *Version sichern* legt eine fortlaufend nummerierte
+Kopie im Unterordner `.versions` neben der Datei ab — `entwurf_v001.md`,
+`entwurf_v002.md` und so weiter. Der Ordner ist als versteckt markiert und
+erscheint nicht in der Navigation.
 
 ## Bauen
 
@@ -40,13 +63,16 @@ dist\MarkOne.exe pfad\zur\datei.md
 
 | Kürzel | Funktion |
 |---|---|
-| `Strg+N` | Neu |
-| `Strg+O` | Öffnen |
+| `Strg+N` | Neues Dokument |
+| `Strg+O` | Einzelne Datei öffnen |
+| `Strg+Umschalt+O` | Basisverzeichnis für die Navigation wählen |
 | `Strg+S` | Speichern |
 | `Strg+Umschalt+S` | Speichern unter |
+| `Strg+Alt+S` | Als neue Version in `.versions` sichern |
 | `Strg+F` | Suchen |
 | `Strg+H` | Ersetzen |
 | `Strg+Z` / `Strg+Y` | Rückgängig / Wiederholen |
+| `F5` | Navigation neu einlesen |
 
 ## Was dargestellt wird
 
@@ -68,13 +94,26 @@ sich schlechter).
 |---|---|
 | `Theme.cs` | Typografie und Farben — der einzige Ort für Gestaltungsfragen |
 | `MarkdownStyler.cs` | Erkennt Markdown pro Zeile und baut die Textläufe |
-| `MainWindow.xaml(.cs)` | Fenster, Dateiverwaltung, Suchen/Ersetzen |
+| `FileTree.cs` | Navigationsbaum: Einlesen, Filtern, Überschriften auslesen |
+| `Settings.cs` | Was zwischen zwei Starts erhalten bleibt |
+| `Recovery.cs` | Absturzsicherung |
+| `Versioning.cs` | Nummerierte Zwischenstände |
+| `MainWindow.xaml(.cs)` | Fenster, Werkzeugleiste, Dateiverwaltung, Suchen |
 | `FindReplaceWindow.xaml(.cs)` | Der Suchen-Dialog |
+| `RecoveryWindow.xaml(.cs)` | Auswahl liegengebliebener Fassungen |
 
-Kern ist eine WPF-`RichTextBox`, in der **jede Zeile ein eigener Absatz** ist.
-Beim Tippen wird nur der Absatz unter dem Cursor neu formatiert; das ganze
-Dokument nur dann, wenn sich Codeblock-Grenzen verschieben oder größere Mengen
-Text eingefügt werden.
+Kern des Editors ist eine WPF-`RichTextBox`, in der **jede Zeile ein eigener
+Absatz** ist. Beim Tippen wird nur der Absatz unter dem Cursor neu formatiert;
+das ganze Dokument nur dann, wenn sich Codeblock-Grenzen verschieben oder
+größere Mengen Text eingefügt werden.
+
+## Wo MarkOne Daten ablegt
+
+| Ort | Inhalt |
+|---|---|
+| `%APPDATA%\MarkOne\settings.json` | Basisverzeichnis, Fenstergröße, Baumbreite, Autospeichern |
+| `%APPDATA%\MarkOne\recovery\` | Arbeitskopien der Absturzsicherung |
+| `<Dokumentordner>\.versions\` | Nummerierte Versionen, versteckt |
 
 ## Messwerte
 
@@ -82,9 +121,9 @@ Gemessen auf einem Windows-11-Rechner mit 20 Kernen:
 
 | | MarkOne | Ghostwriter | Windows Notepad |
 |---|---|---|---|
-| Speicherplatz | **0,2 MB** | 431 MB | (Systembestandteil) |
-| Startzeit | **~490 ms** | — | — |
-| Arbeitsspeicher | 264 MB | 200 MB | 210 MB |
+| Speicherplatz | **0,25 MB** | 431 MB | (Systembestandteil) |
+| Startzeit | **~460 ms** | — | — |
+| Arbeitsspeicher | 289 MB | 200 MB | 210 MB |
 
 Der Platzbedarf-Unterschied ist echt und groß. Beim **Arbeitsspeicher gibt es
 keinen Vorteil** — rund 200 MB sind die Grundlast von .NET und WPF, unabhängig
@@ -93,11 +132,17 @@ Technologiebasis (Win32/C++), nicht ein kleineres Programm.
 
 ## Bekannte Grenzen
 
+- **Die Navigation aktualisiert sich nicht von selbst.** Dateien, die außerhalb
+  von MarkOne entstehen, erscheinen erst nach `F5`. Ein Dateisystem-Wächter
+  wurde bewusst weggelassen — bei Netzlaufwerken und großen Bäumen bringt er
+  mehr Ärger als Nutzen.
 - **Keine verschachtelte Auszeichnung.** `**fett mit _kursiv_ darin**` wird nur
   auf der äußeren Ebene erkannt.
 - **Tabellen** werden nicht besonders dargestellt, nur als normaler Text.
 - **Rückgängig** kann in seltenen Fällen einen Formatierungsschritt statt einer
   Texteingabe zurücknehmen — die Neuformatierung landet mit im Undo-Verlauf.
+- **Mehrere Instanzen** teilen sich `settings.json`; beim Schließen gewinnt die
+  zuletzt beendete.
 - Umschalt+Enter erzeugt bewusst einen normalen Absatz, keinen weichen Umbruch.
 - Kein Dark Mode.
 
