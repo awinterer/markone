@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Erzeugt das MarkOne-Logo: SVG-Vorlagen, PNG-Fassungen und die
+    Windows-Symboldatei (.ico) für die Anwendung.
+
+      dotnet run ~~project tools/LogoGen ~~ <Repositorywurzel> [Vorschauordner]
+
+    (~~ steht hier für zwei Bindestriche, die in XML-Kommentaren nicht erlaubt sind.)
+
+    Die Form ist im Code beschrieben, nicht in einer Grafikdatei. So
+    entstehen alle Größen aus derselben Geometrie, pixelgenau gerendert.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>LogoGen</RootNamespace>
+  </PropertyGroup>
+
+</Project>

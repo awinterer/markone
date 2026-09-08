@@ -9,7 +9,8 @@
     <AssemblyName>MarkOne</AssemblyName>
     <RootNamespace>MarkOne</RootNamespace>
     <ApplicationTitle>MarkOne</ApplicationTitle>
-    <Version>0.2.0</Version>
+    <ApplicationIcon>../../assets/icon/markone.ico</ApplicationIcon>
+    <Version>0.2.1</Version>
     <SelfContained>false</SelfContained>
     <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>

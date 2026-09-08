@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo/markone-logo.svg" alt="MarkOne" width="440">
+</p>
+
 # MarkOne
 
 **Ein kleiner Markdown-Editor für Windows.** Schlank wie Notepad, aber mit
@@ -101,6 +105,7 @@ sich schlechter).
 | `MainWindow.xaml(.cs)` | Fenster, Werkzeugleiste, Dateiverwaltung, Suchen |
 | `FindReplaceWindow.xaml(.cs)` | Der Suchen-Dialog |
 | `RecoveryWindow.xaml(.cs)` | Auswahl liegengebliebener Fassungen |
+| `tools/LogoGen/` | Erzeugt Logo und Symboldatei aus einer Geometriebeschreibung |
 
 Kern des Editors ist eine WPF-`RichTextBox`, in der **jede Zeile ein eigener
 Absatz** ist. Beim Tippen wird nur der Absatz unter dem Cursor neu formatiert;

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <title>MarkOne</title>
+  <rect width="256" height="256" rx="56" fill="#2E2C28"/>
+  <path fill="#D89A4E" d="M113.04 109L151.04 109L142.96 147L104.96 147Z"/>
+  <path fill="#F4EFE4" d="M40 80L216 80L216 112L40 112ZM40 144L216 144L216 176L40 176ZM98.71 40L130.71 40L93.29 216L61.29 216ZM162.71 40L194.71 40L157.29 216L125.29 216Z"/>
+</svg>
