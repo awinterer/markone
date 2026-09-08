@@ -7,6 +7,10 @@ namespace MarkOne;
 /// Sämtliche Typografie- und Farbentscheidungen an einem Ort.
 /// Wer das Aussehen ändern will, ändert nur diese Datei.
 /// (Heißt bewusst nicht "Style" — das kollidiert mit Window.Style.)
+///
+/// Das XAML greift über <see cref="Install"/> auf dieselben Werte zu; dort
+/// steht keine Farbe mehr als Zahl. Ein Dark Mode tauscht später nur die
+/// Einträge in <see cref="Install"/> aus.
 /// </summary>
 public static class Theme
 {
@@ -14,6 +18,10 @@ public static class Theme
     // WPF akzeptiert eine Fallback-Liste; das erste installierte gewinnt.
     public static readonly FontFamily Body = new("Georgia, Cambria, Segoe UI");
     public static readonly FontFamily Mono = new("Cascadia Mono, Consolas, Courier New");
+    public static readonly FontFamily Ui = new("Segoe UI");
+
+    /// <summary>Einfarbige Symbole aus Windows selbst — keine Bilddateien nötig.</summary>
+    public static readonly FontFamily Icons = new("Segoe Fluent Icons, Segoe MDL2 Assets");
 
     // --- Größen ----------------------------------------------------------
     public const double BaseSize = 16.5;
@@ -44,10 +52,8 @@ public static class Theme
     /// <summary>Maximale Textspaltenbreite. Alles darüber liest sich schlecht.</summary>
     public const double MaxColumnWidth = 760.0;
 
-    // --- Farben ----------------------------------------------------------
+    // --- Farben: Text ----------------------------------------------------
     public static readonly SolidColorBrush Paper = Frozen("#FDFCFA");
-    public static readonly SolidColorBrush Chrome = Frozen("#F1EEE8");
-    public static readonly SolidColorBrush ChromeBorder = Frozen("#E3DED4");
     public static readonly SolidColorBrush Text = Frozen("#33322E");
     public static readonly SolidColorBrush Heading = Frozen("#1C1B18");
     public static readonly SolidColorBrush Marker = Frozen("#C3BEB3");   // die ## und ** — da, aber leise
@@ -60,8 +66,18 @@ public static class Theme
     public static readonly SolidColorBrush Rule = Frozen("#D8D3C8");
     public static readonly SolidColorBrush Selection = Frozen("#CFE0F0");
 
-    // --- Navigationsbaum -------------------------------------------------
-    public static readonly FontFamily Ui = new("Segoe UI");
+    // --- Farben: Rahmen (Kopfzeile, Statuszeile, Dialoge) ----------------
+    public static readonly SolidColorBrush Chrome = Frozen("#F1EEE8");
+    public static readonly SolidColorBrush ChromeBorder = Frozen("#E3DED4");
+    public static readonly SolidColorBrush ChromeText = Frozen("#3B382F");
+    public static readonly SolidColorBrush Highlight = Frozen("#E4DCCB");        // Maus über Knopf, Auswahl im Baum
+    public static readonly SolidColorBrush HighlightStrong = Frozen("#D8CDB6");  // Knopf gedrückt, Menü offen
+    public static readonly SolidColorBrush Disabled = Frozen("#B5AFA3");
+    public static readonly SolidColorBrush Success = Frozen("#5F7F4F");          // "Gespeichert" in der Statuszeile
+    public static readonly SolidColorBrush ScrollThumb = Frozen("#CDC6B9");
+    public static readonly SolidColorBrush ScrollThumbHover = Frozen("#A9A296");
+
+    // --- Farben: Navigationsbaum -----------------------------------------
     public static readonly SolidColorBrush TreeBg = Frozen("#F7F4EE");
     public static readonly SolidColorBrush TreeFolder = Frozen("#4A473F");
     public static readonly SolidColorBrush TreeHeading = Frozen("#2B2A26");
@@ -69,6 +85,44 @@ public static class Theme
     public static readonly SolidColorBrush TreeNoHeading = Frozen("#B5AFA3");
     public static readonly SolidColorBrush TreeSelected = Frozen("#E4DCCB");
     public static readonly SolidColorBrush TreeHover = Frozen("#EDE8DE");
+
+    // --- Ressourcen für XAML ---------------------------------------------
+
+    /// <summary>
+    /// Trägt Pinsel und Schriften unter festen Namen in ein Ressourcenwörterbuch
+    /// ein. Das XAML verweist per DynamicResource darauf.
+    /// </summary>
+    public static void Install(ResourceDictionary r)
+    {
+        r["Font.Body"] = Body;
+        r["Font.Mono"] = Mono;
+        r["Font.Ui"] = Ui;
+        r["Font.Icons"] = Icons;
+
+        r["Brush.Paper"] = Paper;
+        r["Brush.Text"] = Text;
+        r["Brush.Muted"] = Muted;
+        r["Brush.Rule"] = Rule;
+        r["Brush.Selection"] = Selection;
+
+        r["Brush.Chrome"] = Chrome;
+        r["Brush.ChromeBorder"] = ChromeBorder;
+        r["Brush.ChromeText"] = ChromeText;
+        r["Brush.Highlight"] = Highlight;
+        r["Brush.HighlightStrong"] = HighlightStrong;
+        r["Brush.Disabled"] = Disabled;
+        r["Brush.Success"] = Success;
+        r["Brush.ScrollThumb"] = ScrollThumb;
+        r["Brush.ScrollThumbHover"] = ScrollThumbHover;
+
+        r["Brush.TreeBg"] = TreeBg;
+        r["Brush.TreeFolder"] = TreeFolder;
+        r["Brush.TreeHeading"] = TreeHeading;
+        r["Brush.TreeFileName"] = TreeFileName;
+        r["Brush.TreeNoHeading"] = TreeNoHeading;
+        r["Brush.TreeSelected"] = TreeSelected;
+        r["Brush.TreeHover"] = TreeHover;
+    }
 
     private static SolidColorBrush Frozen(string hex)
     {

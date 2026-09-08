@@ -92,11 +92,20 @@ Georgia auf etwas anderes umstellen, die Zeilenhöhe justieren oder die
 Textspaltenbreite ändern (`MaxColumnWidth`, aktuell 760 Punkt — breiter liest
 sich schlechter).
 
+Das XAML enthält keine einzige Farbe als Zahl: `Theme.Install` trägt die Pinsel
+und Schriften beim Start als benannte Ressourcen ein, auf die die Oberfläche
+per `DynamicResource` zugreift. Die Form der Bedienelemente steht in
+[`src/MarkOne/Controls.xaml`](src/MarkOne/Controls.xaml). Symbole in der
+Kopfzeile kommen aus der Windows-Schrift *Segoe Fluent Icons*, es liegen keine
+Bilddateien bei.
+
 ## Aufbau
 
 | Datei | Zweck |
 |---|---|
 | `Theme.cs` | Typografie und Farben — der einzige Ort für Gestaltungsfragen |
+| `Controls.xaml` | Form der Bedienelemente: Menü, Knöpfe, Baum, Bildlaufleisten |
+| `TitleBar.cs` | Färbt die Titelleiste unter Windows 11 passend zur Kopfzeile |
 | `MarkdownStyler.cs` | Erkennt Markdown pro Zeile und baut die Textläufe |
 | `FileTree.cs` | Navigationsbaum: Einlesen, Filtern, Überschriften auslesen |
 | `Settings.cs` | Was zwischen zwei Starts erhalten bleibt |

@@ -5,8 +5,8 @@
         Height="Auto" Width="430" SizeToContent="Height"
         ResizeMode="NoResize" ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner"
-        Background="#F1EEE8"
-        FontFamily="Segoe UI" FontSize="12.5">
+        Background="{DynamicResource Brush.Chrome}"
+        FontFamily="{DynamicResource Font.Ui}" FontSize="12.5">
 
     <Window.InputBindings>
         <KeyBinding Key="Escape" Command="ApplicationCommands.Close" />
@@ -47,6 +47,6 @@
         </StackPanel>
 
         <TextBlock Grid.Row="4" Grid.Column="1" x:Name="Info"
-                   Foreground="#8A857B" Margin="0,10,0,0" TextWrapping="Wrap" />
+                   Foreground="{DynamicResource Brush.Muted}" Margin="0,10,0,0" TextWrapping="Wrap" />
     </Grid>
 </Window>

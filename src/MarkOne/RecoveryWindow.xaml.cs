@@ -14,6 +14,7 @@ public partial class RecoveryWindow : Window
     public RecoveryWindow(IEnumerable<RecoveryEntry> entries)
     {
         InitializeComponent();
+        TitleBar.Attach(this);
         _entries = new ObservableCollection<RecoveryEntry>(entries);
         Entries.ItemsSource = _entries;
         if (_entries.Count > 0) Entries.SelectedIndex = 0;

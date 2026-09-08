@@ -5,26 +5,26 @@
         Width="660" SizeToContent="Height"
         ResizeMode="NoResize" ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner"
-        Background="#F1EEE8"
-        FontFamily="Segoe UI" FontSize="12.5">
+        Background="{DynamicResource Brush.Chrome}"
+        FontFamily="{DynamicResource Font.Ui}" FontSize="12.5">
 
     <StackPanel Margin="20">
 
-        <TextBlock TextWrapping="Wrap" Foreground="#3B382F" Margin="0,0,0,4">
+        <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Brush.ChromeText}" Margin="0,0,0,4">
             MarkOne wurde beim letzten Mal beendet, ohne dass diese Änderungen gespeichert wurden.
         </TextBlock>
-        <TextBlock TextWrapping="Wrap" Foreground="#8A857B" FontSize="11.5" Margin="0,0,0,14">
+        <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Brush.Muted}" FontSize="11.5" Margin="0,0,0,14">
             Die Originaldateien sind unverändert. Beim Wiederherstellen wird der gesicherte Stand
             geöffnet, aber noch nicht geschrieben — du entscheidest danach selbst über das Speichern.
         </TextBlock>
 
-        <ListBox x:Name="Entries" Height="190" BorderBrush="#DDD7CB" Background="#FDFCFA"
+        <ListBox x:Name="Entries" Height="190" BorderBrush="{DynamicResource Brush.Rule}" Background="{DynamicResource Brush.Paper}"
                  SelectionMode="Single" Margin="0,0,0,16">
             <ListBox.ItemTemplate>
                 <DataTemplate>
                     <StackPanel Margin="4,6">
-                        <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" Foreground="#2B2A26" />
-                        <TextBlock Text="{Binding DisplayDetail}" FontSize="11" Foreground="#8A857B"
+                        <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" Foreground="{DynamicResource Brush.TreeHeading}" />
+                        <TextBlock Text="{Binding DisplayDetail}" FontSize="11" Foreground="{DynamicResource Brush.Muted}"
                                    Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
                     </StackPanel>
                 </DataTemplate>

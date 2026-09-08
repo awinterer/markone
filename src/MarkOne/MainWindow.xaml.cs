@@ -41,6 +41,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        TitleBar.Attach(this);
 
         _settings = Settings.Load();
         Width = _settings.WindowWidth;

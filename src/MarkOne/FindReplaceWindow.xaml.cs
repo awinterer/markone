@@ -10,6 +10,7 @@ public partial class FindReplaceWindow : Window
     public FindReplaceWindow(MainWindow editor)
     {
         InitializeComponent();
+        TitleBar.Attach(this);
         _editor = editor;
     }
 

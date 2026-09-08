@@ -8,6 +8,10 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // Farben und Schriften aus Theme.cs für das XAML bereitstellen,
+        // bevor das erste Fenster entsteht.
+        Theme.Install(Resources);
+
         var window = new MainWindow();
 
         // Erlaubt "Öffnen mit" aus dem Explorer heraus.
