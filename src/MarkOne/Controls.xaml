@@ -292,6 +292,7 @@
     <Style x:Key="TreeItem" TargetType="TreeViewItem">
         <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
         <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+        <Setter Property="AutomationProperties.Name" Value="{Binding Name}" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.TreeHeading}" />
         <Setter Property="Template">
             <Setter.Value>

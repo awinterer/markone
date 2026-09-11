@@ -36,6 +36,8 @@ public partial class MainWindow : Window
     private bool _suppress;               // verhindert Rekursion beim Umformatieren
     private bool _suppressTreeSelection;  // verhindert Rückkopplung beim Zurücknehmen der Auswahl
     private FileNode? _currentNode;           // Knoten des Dokuments im Editor
+    private Pane _pane = Pane.Editor;         // was rechts zu sehen ist
+    private string? _viewPath;                // im Betrachter gezeigte Datei
     private TreeNode? _contextNode;           // Knoten unter dem Kontextmenü
     private FindReplaceWindow? _finder;
 
@@ -57,6 +59,8 @@ public partial class MainWindow : Window
         FileScanner.ShowAllFiles = _settings.ShowAllFiles;
 
         Tree.ItemsSource = _roots;
+        Images.StatusChanged += (_, _) => { if (_pane == Pane.Image) StatusCount.Text = Images.Status; };
+        Pdfs.StatusChanged += (_, _) => { if (_pane == Pane.Pdf) StatusCount.Text = Pdfs.Status; };
 
         DataObject.AddPastingHandler(Editor, OnPaste);
 
@@ -284,7 +288,58 @@ public partial class MainWindow : Window
         e.CanExecute = IsEditing && _path is not null;
 
     /// <summary>Ob rechts gerade der Editor steht (und nicht ein Betrachter).</summary>
-    private bool IsEditing => true;
+    private bool IsEditing => _pane == Pane.Editor;
+
+    // ============================================================ Betrachter
+
+    private enum Pane { Editor, Image, Pdf }
+
+    /// <summary>Zurück zum Editor; das dort geladene Dokument bleibt, wie es war.</summary>
+    private void ShowEditor()
+    {
+        if (_pane != Pane.Editor)
+        {
+            _pane = Pane.Editor;
+            _viewPath = null;
+            Images.Visibility = Visibility.Collapsed;
+            Pdfs.Visibility = Visibility.Collapsed;
+            Images.Clear();
+            Pdfs.Clear();
+            Editor.Visibility = Visibility.Visible;
+            UpdateTitle();
+            UpdateWordCount();
+            CommandManager.InvalidateRequerySuggested();
+        }
+        Editor.Focus();
+    }
+
+    private void ShowImage(string path) => ShowViewer(Pane.Image, path);
+    private void ShowPdf(string path) => ShowViewer(Pane.Pdf, path);
+
+    private void ShowViewer(Pane pane, string path)
+    {
+        _pane = pane;
+        _viewPath = path;
+        Editor.Visibility = Visibility.Collapsed;
+        Images.Visibility = pane == Pane.Image ? Visibility.Visible : Visibility.Collapsed;
+        Pdfs.Visibility = pane == Pane.Pdf ? Visibility.Visible : Visibility.Collapsed;
+
+        if (pane == Pane.Image)
+        {
+            Pdfs.Clear();
+            Images.Load(path);
+            Images.Focus();
+        }
+        else
+        {
+            Images.Clear();
+            Pdfs.Load(path);
+            Pdfs.Focus();
+        }
+
+        UpdateTitle();
+        CommandManager.InvalidateRequerySuggested();
+    }
 
     // ================================================================ Eingabe
 
@@ -321,12 +376,20 @@ public partial class MainWindow : Window
 
     private void UpdateWordCount()
     {
+        if (_pane != Pane.Editor) return;
         int words = RxWord.Matches(GetDocumentText()).Count;
         StatusCount.Text = words == 1 ? "1 Wort" : $"{words:N0} Wörter";
     }
 
     private void UpdateTitle()
     {
+        if (_viewPath is not null)
+        {
+            Title = Path.GetFileName(_viewPath) + "  —  MarkOne";
+            StatusFile.Text = _viewPath;
+            return;
+        }
+
         string name = _path is null ? "Unbenannt" : Path.GetFileName(_path);
         Title = (_dirty ? "• " : "") + name + "  —  MarkOne";
         StatusFile.Text = _path ?? "Unbenannt";
@@ -393,18 +456,25 @@ public partial class MainWindow : Window
         if (_suppressTreeSelection) return;
         if (e.NewValue is not FileNode node) return;
 
-        if (node.Kind != FileKind.Markdown)
+        switch (node.Kind)
         {
-            DescribeFile(node);
-            return;
+            case FileKind.Image:
+                ShowImage(node.FullPath);
+                return;
+            case FileKind.Pdf:
+                ShowPdf(node.FullPath);
+                return;
+            case FileKind.Other:
+                DescribeFile(node);
+                return;
         }
 
-        if (ReferenceEquals(node, _currentNode)) return;
-
-        // Bereits offene Datei erneut angeklickt: nichts tun.
-        if (_path is not null && string.Equals(node.FullPath, _path, StringComparison.OrdinalIgnoreCase))
+        // Bereits offene Datei erneut angeklickt: nur den Editor nach vorn holen.
+        if (ReferenceEquals(node, _currentNode)
+            || (_path is not null && string.Equals(node.FullPath, _path, StringComparison.OrdinalIgnoreCase)))
         {
             _currentNode = node;
+            ShowEditor();
             return;
         }
 
@@ -428,11 +498,17 @@ public partial class MainWindow : Window
     /// </summary>
     private void ClearTreeSelection()
     {
-        if (_currentNode is null) return;
-        _suppressTreeSelection = true;
-        _currentNode.IsSelected = false;
-        _suppressTreeSelection = false;
+        DeselectTree();
         _currentNode = null;
+    }
+
+    /// <summary>Hebt nur die Markierung auf; das Dokument im Editor bleibt seinem Knoten zugeordnet.</summary>
+    private void DeselectTree()
+    {
+        _suppressTreeSelection = true;
+        if (Tree.SelectedItem is TreeNode selected) selected.IsSelected = false;
+        if (_currentNode is not null) _currentNode.IsSelected = false;
+        _suppressTreeSelection = false;
     }
 
     /// <summary>Statuszeile für Dateien, die MarkOne nicht selbst öffnet.</summary>
@@ -540,6 +616,7 @@ public partial class MainWindow : Window
 
         if (dialog.Restored is { } entry)
         {
+            ShowEditor();
             SetDocumentText(entry.Content);
             _path = entry.OriginalPath;
             _dirty = true;                 // bewusst: die Fassung steht noch nicht in der Datei
@@ -550,8 +627,26 @@ public partial class MainWindow : Window
 
     // =============================================================== Dateien
 
+    /// <summary>Öffnet eine Datei so, wie es zu ihr passt: Editor oder Betrachter.</summary>
     public void LoadFile(string path)
     {
+        switch (FileScanner.KindOf(path))
+        {
+            case FileKind.Image:
+                ShowImage(path);
+                return;
+            case FileKind.Pdf:
+                ShowPdf(path);
+                return;
+            default:
+                LoadDocument(path);
+                return;
+        }
+    }
+
+    private void LoadDocument(string path)
+    {
+        ShowEditor();
         try
         {
             string text = File.ReadAllText(path, Encoding.UTF8);
@@ -657,6 +752,7 @@ public partial class MainWindow : Window
     private void OnNew(object sender, ExecutedRoutedEventArgs e)
     {
         if (!ConfirmDiscard()) return;
+        ShowEditor();
         SetDocumentText(string.Empty);
         _path = null;
         ClearTreeSelection();
@@ -666,17 +762,29 @@ public partial class MainWindow : Window
 
     private void OnOpen(object sender, ExecutedRoutedEventArgs e)
     {
-        if (!ConfirmDiscard()) return;
-
+        string images = string.Join(";", FileScanner.ImageExtensions.Select(x => "*" + x));
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Filter = "Markdown (*.md;*.markdown;*.txt)|*.md;*.markdown;*.txt|Alle Dateien (*.*)|*.*",
+            Filter = $"Alles, was MarkOne zeigt|*.md;*.markdown;*.txt;*.pdf;{images}"
+                   + "|Markdown (*.md;*.markdown;*.txt)|*.md;*.markdown;*.txt"
+                   + "|PDF (*.pdf)|*.pdf"
+                   + $"|Bilder|{images}"
+                   + "|Alle Dateien (*.*)|*.*",
         };
-        if (dialog.ShowDialog(this) == true)
+        if (dialog.ShowDialog(this) != true) return;
+
+        string path = dialog.FileName;
+        var kind = FileScanner.KindOf(path);
+        if (kind is FileKind.Image or FileKind.Pdf)
         {
-            ClearTreeSelection();
-            LoadFile(dialog.FileName);
+            DeselectTree();
+            ShowViewer(kind == FileKind.Image ? Pane.Image : Pane.Pdf, path);
+            return;
         }
+
+        if (!ConfirmDiscard()) return;
+        ClearTreeSelection();
+        LoadDocument(path);
     }
 
     private void OnSave(object sender, ExecutedRoutedEventArgs e) => Save();

@@ -215,20 +215,24 @@
                           VerticalAlignment="Stretch" Background="Transparent"
                           ResizeBehavior="PreviousAndNext" />
 
-            <!-- Rechts: Editor -->
-            <RichTextBox Grid.Column="2" x:Name="Editor"
-                         BorderThickness="0"
-                         Background="{DynamicResource Brush.Paper}"
-                         Padding="0"
-                         AcceptsTab="True"
-                         SpellCheck.IsEnabled="False"
-                         VerticalScrollBarVisibility="Auto"
-                         HorizontalScrollBarVisibility="Disabled"
-                         SelectionBrush="{DynamicResource Brush.Selection}"
-                         CaretBrush="{DynamicResource Brush.Text}"
-                         TextChanged="OnTextChanged"
-                         SizeChanged="OnEditorSizeChanged"
-                         PreviewKeyDown="OnEditorPreviewKeyDown" />
+            <!-- Rechts: Editor oder ein Betrachter, je nach Datei -->
+            <Grid Grid.Column="2">
+                <RichTextBox x:Name="Editor"
+                             BorderThickness="0"
+                             Background="{DynamicResource Brush.Paper}"
+                             Padding="0"
+                             AcceptsTab="True"
+                             SpellCheck.IsEnabled="False"
+                             VerticalScrollBarVisibility="Auto"
+                             HorizontalScrollBarVisibility="Disabled"
+                             SelectionBrush="{DynamicResource Brush.Selection}"
+                             CaretBrush="{DynamicResource Brush.Text}"
+                             TextChanged="OnTextChanged"
+                             SizeChanged="OnEditorSizeChanged"
+                             PreviewKeyDown="OnEditorPreviewKeyDown" />
+                <local:ImageViewer x:Name="Images" Visibility="Collapsed" />
+                <local:PdfViewer x:Name="Pdfs" Visibility="Collapsed" />
+            </Grid>
         </Grid>
 
     </DockPanel>

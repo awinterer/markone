@@ -6,7 +6,9 @@
 
 **Ein kleiner Markdown-Editor für Windows.** Schlank wie Notepad, aber mit
 lesbarer Typografie und einer Navigation, die deine Notizen nach Überschriften
-statt nach Dateinamen sortiert zeigt.
+statt nach Dateinamen sortiert zeigt. Bilder und PDF-Dateien aus demselben
+Ordner zeigt MarkOne gleich mit an, alles andere öffnet es im zugehörigen
+Programm.
 
 Einspaltig und live gestylt: Du tippst Markdown, die Formatierung erscheint
 sofort. Die Markdown-Zeichen (`##`, `**`) bleiben sichtbar, treten aber in
@@ -19,7 +21,9 @@ Text darzustellen: Obsidian, Typora, Zettlr und Joplin bauen auf Electron,
 Ghostwriter auf QtWebEngine. Das kostet mehrere hundert Megabyte auf der Platte
 für eine Aufgabe, die keine braucht.
 
-MarkOne rendert nativ mit WPF. Die Anwendung ist rund **250 KB** groß.
+MarkOne rendert nativ mit WPF. Der Editor selbst ist rund **300 KB** groß;
+dazu kommen 7,2 MB für den PDF-Kern von Chrome (PDFium), der ohne Browser
+auskommt.
 
 ## Was es kann
 
@@ -31,7 +35,34 @@ Markdown-Datei liegt, werden ausgeblendet; `node_modules`, `.git` und
 Hintergrund eingelesen, große Bäume blockieren den Start also nicht.
 
 Das zuletzt gewählte Basisverzeichnis wird gemerkt und beim nächsten Start
-wieder geöffnet.
+wieder geöffnet. Ein Ordner als Startparameter (`MarkOne.exe C:\Notizen`)
+öffnet ihn nur für diesen Start.
+
+**Alle Dateien.** Der Baum zeigt auch Dateien, die MarkOne nicht selbst
+bearbeitet, einzeilig mit einem Typkürzel wie PDF, DOCX oder XLSX. Ein Klick
+nennt in der Statuszeile Größe und zugeordnetes Programm, Doppelklick oder
+Enter startet es, etwa Word für eine .docx. Das Kontextmenü bietet
+*Standardprogramm*, *Explorer* und *Pfad kopieren*. Wer nur seine Notizen
+sehen will, schaltet *Alle Dateien anzeigen* unter *Ansicht* ab.
+
+**Bilder.** PNG, JPEG, GIF, BMP, TIFF und ICO öffnen im eingebauten
+Betrachter; WebP, HEIC und AVIF ebenfalls, wenn die zugehörigen
+Windows-Erweiterungen installiert sind. Das Bild wird eingepasst, kleine
+Bilder nicht aufgeblasen. Strg+Mausrad zoomt um den Mauszeiger, Ziehen mit
+der Maus verschiebt, Doppelklick wechselt zwischen Einpassen und 100 %. 100 %
+heißt ein Bildpixel je Bildschirmpixel, auch auf skalierten Bildschirmen.
+Die Drehung aus den Kameradaten (EXIF) wird beachtet.
+
+**PDF.** Alle Seiten untereinander, fortlaufend gescrollt, auf Seitenbreite
+eingepasst. Gezeichnet wird nur, was im Blick ist; was weit weg scrollt, gibt
+seinen Speicher wieder frei. Kommentare und Markierungen werden mitgezeichnet.
+Die Datei wird beim Öffnen vollständig gelesen und bleibt auf der Platte
+nicht gesperrt: Ein aus Word neu exportiertes PDF lässt sich einfach neu
+anklicken.
+
+Der Editor bleibt im Hintergrund erhalten, solange ein Bild oder PDF zu sehen
+ist. Ein Klick auf die offene Markdown-Datei holt ihn ohne Neuladen zurück.
+Speichern, Suchen und Versionen sind in der Zeit abgeschaltet.
 
 **Absturzsicherung.** Drei Sekunden nach der letzten Eingabe schreibt MarkOne
 eine Arbeitskopie nach `%APPDATA%\MarkOne\recovery\`. Die Originaldatei bleibt
@@ -45,7 +76,8 @@ erscheint nicht in der Navigation.
 
 ## Bauen
 
-Voraussetzung ist das .NET 9 SDK.
+Voraussetzung ist das .NET 9 SDK. Gebaut wird für 64-Bit-Windows, damit
+genau eine `pdfium.dll` neben der EXE liegt.
 
 ```bash
 dotnet publish src/MarkOne/MarkOne.csproj -c Release -o dist
@@ -77,6 +109,19 @@ dist\MarkOne.exe pfad\zur\datei.md
 | `Strg+H` | Ersetzen |
 | `Strg+Z` / `Strg+Y` | Rückgängig / Wiederholen |
 | `F5` | Navigation neu einlesen |
+| `Enter` / Doppelklick im Baum | Datei im zugehörigen Programm öffnen |
+
+Im Bild- und PDF-Betrachter:
+
+| Kürzel | Funktion |
+|---|---|
+| `Strg+Mausrad` | Zoomen um den Mauszeiger |
+| `Strg+0` | Einpassen (Bild) bzw. Seitenbreite (PDF) |
+| `Strg+1` | 100 % |
+| `Strg++` / `Strg+-` | Größer / kleiner |
+| Doppelklick (Bild) | Einpassen und 100 % wechseln |
+| Ziehen (Bild) | Verschieben |
+| `Bild ↑` / `Bild ↓` / `Leertaste` (PDF) | Blättern |
 
 ## Was dargestellt wird
 
@@ -107,7 +152,12 @@ Bilddateien bei.
 | `Controls.xaml` | Form der Bedienelemente: Menü, Knöpfe, Baum, Bildlaufleisten |
 | `TitleBar.cs` | Färbt die Titelleiste unter Windows 11 passend zur Kopfzeile |
 | `MarkdownStyler.cs` | Erkennt Markdown pro Zeile und baut die Textläufe |
-| `FileTree.cs` | Navigationsbaum: Einlesen, Filtern, Überschriften auslesen |
+| `FileTree.cs` | Navigationsbaum: Einlesen, Filtern, Dateiart bestimmen, Überschriften auslesen |
+| `Shell.cs` | Übergabe an Windows: Standardprogramm, Explorer, Programmname |
+| `ImageViewer.xaml(.cs)` | Bildbetrachter mit Zoom und Verschieben |
+| `PdfViewer.xaml(.cs)` | PDF-Betrachter: Seitenlayout, Zoom, Zeichnen nach Bedarf |
+| `PdfDocument.cs` | Ein geöffnetes PDF: Seitengrößen, Seiten zeichnen |
+| `Pdfium.cs` | Die Handvoll PDFium-Aufrufe und der eine Thread dafür |
 | `Settings.cs` | Was zwischen zwei Starts erhalten bleibt |
 | `Recovery.cs` | Absturzsicherung |
 | `Versioning.cs` | Nummerierte Zwischenstände |
@@ -135,7 +185,7 @@ Gemessen auf einem Windows-11-Rechner mit 20 Kernen:
 
 | | MarkOne | Ghostwriter | Windows Notepad |
 |---|---|---|---|
-| Speicherplatz | **0,25 MB** | 431 MB | (Systembestandteil) |
+| Speicherplatz | **7,6 MB** (0,3 MB ohne PDF-Kern) | 431 MB | (Systembestandteil) |
 | Startzeit | **~460 ms** | — | — |
 | Arbeitsspeicher | 289 MB | 200 MB | 210 MB |
 
@@ -158,6 +208,11 @@ Technologiebasis (Win32/C++), nicht ein kleineres Programm.
 - **Mehrere Instanzen** teilen sich `settings.json`; beim Schließen gewinnt die
   zuletzt beendete.
 - Umschalt+Enter erzeugt bewusst einen normalen Absatz, keinen weichen Umbruch.
+- **PDF:** kein Textmarkieren, keine Suche, keine Formularfelder; Seiten
+  werden als Bild gezeichnet. Bei 200 % Bildschirmskalierung kostet eine
+  eingepasste Seite rund 15 MB Arbeitsspeicher, gehalten werden die
+  sichtbaren Seiten plus je eine davor und danach.
+- **Bilder:** animierte GIFs zeigen das erste Bild, SVG wird nicht dargestellt.
 - Kein Dark Mode.
 
 ## Verhältnis zu Ghostwriter
