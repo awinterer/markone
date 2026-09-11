@@ -77,6 +77,10 @@ public static class Theme
     public static readonly SolidColorBrush ScrollThumb = Frozen("#CDC6B9");
     public static readonly SolidColorBrush ScrollThumbHover = Frozen("#A9A296");
 
+    // --- Farben: Betrachter für Bilder und PDF ---------------------------
+    public static readonly SolidColorBrush ViewerBg = Frozen("#E4DFD5");        // dunkler als der Rahmen, damit Seiten und Bilder tragen
+    public static readonly SolidColorBrush PageBorder = Frozen("#CFC9BE");
+
     // --- Farben: Navigationsbaum -----------------------------------------
     public static readonly SolidColorBrush TreeBg = Frozen("#F7F4EE");
     public static readonly SolidColorBrush TreeFolder = Frozen("#4A473F");
@@ -114,6 +118,8 @@ public static class Theme
         r["Brush.Success"] = Success;
         r["Brush.ScrollThumb"] = ScrollThumb;
         r["Brush.ScrollThumbHover"] = ScrollThumbHover;
+        r["Brush.ViewerBg"] = ViewerBg;
+        r["Brush.PageBorder"] = PageBorder;
 
         r["Brush.TreeBg"] = TreeBg;
         r["Brush.TreeFolder"] = TreeFolder;

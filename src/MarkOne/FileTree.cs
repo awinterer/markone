@@ -93,13 +93,36 @@ public sealed class FolderNode : TreeNode
     }
 }
 
+/// <summary>Was MarkOne mit einer Datei anfangen kann.</summary>
+public enum FileKind
+{
+    /// <summary>Markdown oder Text: wird im Editor bearbeitet.</summary>
+    Markdown,
+    /// <summary>Bild: wird im eingebauten Betrachter gezeigt.</summary>
+    Image,
+    /// <summary>PDF: wird im eingebauten Betrachter gezeigt.</summary>
+    Pdf,
+    /// <summary>Alles andere: öffnet per Doppelklick im zugehörigen Programm.</summary>
+    Other,
+}
+
 public sealed class FileNode : TreeNode
 {
     public FileNode(string path)
     {
         FullPath = path;
         Name = Path.GetFileName(path);
+        Kind = FileScanner.KindOf(path);
+        TypeLabel = FileScanner.TypeLabel(path);
     }
+
+    public FileKind Kind { get; }
+
+    /// <summary>Steuert im Baum die zweizeilige Darstellung mit Überschrift.</summary>
+    public bool IsMarkdown => Kind == FileKind.Markdown;
+
+    /// <summary>Kurzes Typkürzel wie PDF oder DOCX für Dateien, die kein Markdown sind.</summary>
+    public string TypeLabel { get; }
 
     private string? _heading;
     public string? Heading
@@ -116,7 +139,20 @@ public sealed record ScanItem(bool IsFolder, string Path, string Name, string? H
 
 public static class FileScanner
 {
-    public static readonly string[] Extensions = { ".md", ".markdown", ".txt" };
+    public static readonly string[] MarkdownExtensions = { ".md", ".markdown", ".txt" };
+
+    // Was die Windows-Bilddecoder von Haus aus lesen; WebP, HEIC und AVIF nur mit
+    // den zugehörigen Erweiterungen aus dem Store.
+    public static readonly string[] ImageExtensions =
+    {
+        ".png", ".jpg", ".jpeg", ".jfif", ".gif", ".bmp", ".tif", ".tiff",
+        ".ico", ".webp", ".heic", ".heif", ".avif",
+    };
+
+    public static readonly string[] PdfExtensions = { ".pdf" };
+
+    /// <summary>Zeigt der Baum alle Dateien oder nur die, die MarkOne selbst öffnet?</summary>
+    public static bool ShowAllFiles { get; set; } = true;
 
     // Ordner, in denen niemand seine Notizen sucht.
     private static readonly HashSet<string> Skip = new(StringComparer.OrdinalIgnoreCase)
@@ -126,6 +162,12 @@ public static class FileScanner
         Versioning.FolderName,
     };
 
+    // Dateien, die Windows und Office nebenbei ablegen.
+    private static readonly HashSet<string> SkipFiles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "desktop.ini", "thumbs.db", ".ds_store",
+    };
+
     private static readonly Regex RxHeading = new(@"^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$", RegexOptions.Compiled);
     private static readonly Regex RxStripInline = new(@"(\*\*|__|~~|[*_`])", RegexOptions.Compiled);
     private static readonly Regex RxStripLink = new(@"\[([^\]]*)\]\([^)]*\)", RegexOptions.Compiled);
@@ -133,8 +175,33 @@ public static class FileScanner
     // Überschriften ändern sich selten — merken, solange die Datei unverändert ist.
     private static readonly ConcurrentDictionary<string, (DateTime Stamp, string? Heading)> Cache = new();
 
-    public static bool IsSupported(string path) =>
-        Extensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);
+    public static FileKind KindOf(string path)
+    {
+        string ext = Path.GetExtension(path);
+        if (Has(MarkdownExtensions, ext)) return FileKind.Markdown;
+        if (Has(ImageExtensions, ext)) return FileKind.Image;
+        if (Has(PdfExtensions, ext)) return FileKind.Pdf;
+        return FileKind.Other;
+    }
+
+    public static bool IsMarkdown(string path) => KindOf(path) == FileKind.Markdown;
+
+    /// <summary>Kürzel für den Baum: Erweiterung in Großbuchstaben, ohne Punkt.</summary>
+    public static string TypeLabel(string path)
+    {
+        string ext = Path.GetExtension(path).TrimStart('.');
+        return ext.Length == 0 ? "—" : ext.ToUpperInvariant();
+    }
+
+    private static bool Has(string[] list, string ext) =>
+        list.Contains(ext, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Gehört die Datei nach den aktuellen Einstellungen in den Baum?</summary>
+    private static bool IsShown(string path)
+    {
+        if (SkipFiles.Contains(Path.GetFileName(path))) return false;
+        return ShowAllFiles || IsMarkdown(path);
+    }
 
     public static List<ScanItem> Scan(string directory)
     {
@@ -152,9 +219,10 @@ public static class FileScanner
 
             foreach (var file in Directory.EnumerateFiles(directory))
             {
-                if (!IsSupported(file)) continue;
+                if (!IsShown(file)) continue;
                 if (IsHidden(file)) continue;
-                files.Add(new ScanItem(false, file, Path.GetFileName(file), ReadHeading(file)));
+                string? heading = IsMarkdown(file) ? ReadHeading(file) : null;
+                files.Add(new ScanItem(false, file, Path.GetFileName(file), heading));
             }
         }
         catch
@@ -195,7 +263,7 @@ public static class FileScanner
         try
         {
             foreach (var file in Directory.EnumerateFiles(directory))
-                if (IsSupported(file)) return true;
+                if (IsShown(file) && !IsHidden(file)) return true;
 
             foreach (var sub in Directory.EnumerateDirectories(directory))
             {

@@ -14,10 +14,14 @@ public partial class App : Application
 
         var window = new MainWindow();
 
-        // Erlaubt "Öffnen mit" aus dem Explorer heraus.
+        // Erlaubt "Öffnen mit" aus dem Explorer heraus. Ein Ordner als
+        // Parameter wird zum Basisverzeichnis, ohne gemerkt zu werden.
         if (e.Args.Length > 0)
         {
-            window.LoadFile(e.Args[0]);
+            if (System.IO.Directory.Exists(e.Args[0]))
+                window.StartupFolder = e.Args[0];
+            else
+                window.LoadFile(e.Args[0]);
         }
 
         window.Show();

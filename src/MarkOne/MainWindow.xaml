@@ -11,33 +11,54 @@
 
     <Window.Resources>
 
-        <!-- Baum: Ordner einzeilig, Dateien zweizeilig (Überschrift, Dateiname) -->
+        <!-- Baum: Ordner einzeilig -->
         <HierarchicalDataTemplate DataType="{x:Type local:FolderNode}" ItemsSource="{Binding Children}">
             <TextBlock Text="{Binding Name}" FontFamily="{DynamicResource Font.Ui}" FontSize="12.5"
                        FontWeight="SemiBold" Foreground="{DynamicResource Brush.TreeFolder}"
                        Margin="0,5,0,5" TextTrimming="CharacterEllipsis" />
         </HierarchicalDataTemplate>
 
+        <!-- Baum: Markdown zweizeilig (Überschrift, Dateiname), alles andere einzeilig mit Typkürzel -->
         <DataTemplate DataType="{x:Type local:FileNode}">
-            <StackPanel Margin="0,5,0,5">
-                <TextBlock Text="{Binding Display}" FontFamily="{DynamicResource Font.Body}"
-                           FontSize="13" TextTrimming="CharacterEllipsis">
-                    <TextBlock.Style>
-                        <Style TargetType="TextBlock">
-                            <Setter Property="Foreground" Value="{DynamicResource Brush.TreeHeading}" />
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding Heading}" Value="{x:Null}">
-                                    <Setter Property="Foreground" Value="{DynamicResource Brush.TreeNoHeading}" />
-                                    <Setter Property="FontStyle" Value="Italic" />
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </TextBlock.Style>
-                </TextBlock>
-                <TextBlock Text="{Binding Name}" FontFamily="{DynamicResource Font.Ui}" FontSize="10.5"
-                           Foreground="{DynamicResource Brush.TreeFileName}" Margin="0,1,0,0"
-                           TextTrimming="CharacterEllipsis" />
-            </StackPanel>
+            <Grid Margin="0,5,0,5">
+                <StackPanel x:Name="Doc">
+                    <TextBlock Text="{Binding Display}" FontFamily="{DynamicResource Font.Body}"
+                               FontSize="13" TextTrimming="CharacterEllipsis">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{DynamicResource Brush.TreeHeading}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Heading}" Value="{x:Null}">
+                                        <Setter Property="Foreground" Value="{DynamicResource Brush.TreeNoHeading}" />
+                                        <Setter Property="FontStyle" Value="Italic" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <TextBlock Text="{Binding Name}" FontFamily="{DynamicResource Font.Ui}" FontSize="10.5"
+                               Foreground="{DynamicResource Brush.TreeFileName}" Margin="0,1,0,0"
+                               TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <DockPanel x:Name="Other" Visibility="Collapsed" Margin="0,1,0,1">
+                    <Border DockPanel.Dock="Left" BorderBrush="{DynamicResource Brush.Rule}" BorderThickness="1"
+                            CornerRadius="3" Padding="4,0" Margin="0,0,7,0" MinWidth="36"
+                            VerticalAlignment="Center" SnapsToDevicePixels="True">
+                        <TextBlock Text="{Binding TypeLabel}" FontFamily="{DynamicResource Font.Ui}" FontSize="9"
+                                   FontWeight="SemiBold" Foreground="{DynamicResource Brush.Muted}"
+                                   HorizontalAlignment="Center" Margin="0,1,0,1" />
+                    </Border>
+                    <TextBlock Text="{Binding Name}" FontFamily="{DynamicResource Font.Ui}" FontSize="12.5"
+                               Foreground="{DynamicResource Brush.TreeFolder}" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" />
+                </DockPanel>
+            </Grid>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsMarkdown}" Value="False">
+                    <Setter TargetName="Doc" Property="Visibility" Value="Collapsed" />
+                    <Setter TargetName="Other" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
         </DataTemplate>
 
         <DataTemplate DataType="{x:Type local:LoadingNode}">
@@ -62,12 +83,12 @@
     <Window.CommandBindings>
         <CommandBinding Command="ApplicationCommands.New" Executed="OnNew" />
         <CommandBinding Command="ApplicationCommands.Open" Executed="OnOpen" />
-        <CommandBinding Command="ApplicationCommands.Save" Executed="OnSave" />
-        <CommandBinding Command="ApplicationCommands.SaveAs" Executed="OnSaveAs" />
-        <CommandBinding Command="ApplicationCommands.Find" Executed="OnFind" />
-        <CommandBinding Command="ApplicationCommands.Replace" Executed="OnReplace" />
+        <CommandBinding Command="ApplicationCommands.Save" Executed="OnSave" CanExecute="CanEdit" />
+        <CommandBinding Command="ApplicationCommands.SaveAs" Executed="OnSaveAs" CanExecute="CanEdit" />
+        <CommandBinding Command="ApplicationCommands.Find" Executed="OnFind" CanExecute="CanEdit" />
+        <CommandBinding Command="ApplicationCommands.Replace" Executed="OnReplace" CanExecute="CanEdit" />
         <CommandBinding Command="{x:Static local:MainWindow.OpenFolderCommand}" Executed="OnOpenFolder" />
-        <CommandBinding Command="{x:Static local:MainWindow.SaveVersionCommand}" Executed="OnSaveVersion" />
+        <CommandBinding Command="{x:Static local:MainWindow.SaveVersionCommand}" Executed="OnSaveVersion" CanExecute="CanSaveVersion" />
         <CommandBinding Command="{x:Static local:MainWindow.RefreshTreeCommand}" Executed="OnRefreshTree" />
     </Window.CommandBindings>
 
@@ -100,6 +121,8 @@
                     <MenuItem Header="_Ansicht">
                         <MenuItem Header="Navigation _aktualisieren" Command="{x:Static local:MainWindow.RefreshTreeCommand}" InputGestureText="F5" />
                         <MenuItem x:Name="MenuShowTree" Header="Navigation an_zeigen" IsCheckable="True" IsChecked="True" Click="OnToggleTree" />
+                        <MenuItem x:Name="MenuAllFiles" Header="Alle _Dateien anzeigen" IsCheckable="True" IsChecked="True" Click="OnToggleAllFiles"
+                                  ToolTip="Auch Dateien zeigen, die MarkOne nicht selbst öffnet — Doppelklick startet das zugehörige Programm" />
                         <Separator />
                         <MenuItem x:Name="MenuAutoSave" Header="Auto_speichern (Absturzsicherung)" IsCheckable="True" IsChecked="True" Click="OnToggleAutoSave" />
                     </MenuItem>
@@ -172,7 +195,19 @@
                               Padding="6,4,4,10"
                               ItemContainerStyle="{StaticResource TreeItem}"
                               SelectedItemChanged="OnTreeSelectionChanged"
-                              ScrollViewer.HorizontalScrollBarVisibility="Disabled" />
+                              MouseDoubleClick="OnTreeDoubleClick"
+                              KeyDown="OnTreeKeyDown"
+                              ContextMenuOpening="OnTreeContextMenuOpening"
+                              ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <TreeView.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem x:Name="MenuOpenExternal" Header="Im _Standardprogramm öffnen" Click="OnOpenExternally" />
+                                <MenuItem Header="Im _Explorer anzeigen" Click="OnRevealInExplorer" />
+                                <Separator />
+                                <MenuItem Header="_Pfad kopieren" Click="OnCopyPath" />
+                            </ContextMenu>
+                        </TreeView.ContextMenu>
+                    </TreeView>
                 </DockPanel>
             </Border>
 
@@ -180,7 +215,7 @@
                           VerticalAlignment="Stretch" Background="Transparent"
                           ResizeBehavior="PreviousAndNext" />
 
-            <!-- Editor -->
+            <!-- Rechts: Editor -->
             <RichTextBox Grid.Column="2" x:Name="Editor"
                          BorderThickness="0"
                          Background="{DynamicResource Brush.Paper}"

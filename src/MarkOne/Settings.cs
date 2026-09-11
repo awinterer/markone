@@ -12,6 +12,7 @@ public sealed class Settings
 {
     public string? BaseDirectory { get; set; }
     public bool AutoSave { get; set; } = true;
+    public bool ShowAllFiles { get; set; } = true;
     public double TreeWidth { get; set; } = 320;
     public double WindowWidth { get; set; } = 1240;
     public double WindowHeight { get; set; } = 880;

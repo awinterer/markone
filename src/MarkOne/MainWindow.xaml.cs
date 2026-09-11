@@ -8,6 +8,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 
 namespace MarkOne;
@@ -27,11 +28,15 @@ public partial class MainWindow : Window
     private readonly Settings _settings;
     private readonly ObservableCollection<TreeNode> _roots = new();
 
+    /// <summary>Basisverzeichnis von der Kommandozeile; gilt nur für diesen Start.</summary>
+    public string? StartupFolder { get; set; }
+
     private string? _path;
     private bool _dirty;
     private bool _suppress;               // verhindert Rekursion beim Umformatieren
     private bool _suppressTreeSelection;  // verhindert Rückkopplung beim Zurücknehmen der Auswahl
-    private FileNode? _currentNode;
+    private FileNode? _currentNode;           // Knoten des Dokuments im Editor
+    private TreeNode? _contextNode;           // Knoten unter dem Kontextmenü
     private FindReplaceWindow? _finder;
 
     private readonly DispatcherTimer _countTimer;
@@ -48,6 +53,8 @@ public partial class MainWindow : Window
         Height = _settings.WindowHeight;
         TreeColumn.Width = new GridLength(_settings.TreeWidth);
         MenuAutoSave.IsChecked = _settings.AutoSave;
+        MenuAllFiles.IsChecked = _settings.ShowAllFiles;
+        FileScanner.ShowAllFiles = _settings.ShowAllFiles;
 
         Tree.ItemsSource = _roots;
 
@@ -74,7 +81,9 @@ public partial class MainWindow : Window
     {
         Editor.Focus();
 
-        if (_settings.BaseDirectory is { } dir && Directory.Exists(dir))
+        if (StartupFolder is { } folder)
+            SetBaseDirectory(folder, remember: false);
+        else if (_settings.BaseDirectory is { } dir && Directory.Exists(dir))
             SetBaseDirectory(dir, remember: false);
 
         OfferRecovery();
@@ -257,6 +266,26 @@ public partial class MainWindow : Window
         Flash(_settings.AutoSave ? "Autospeichern eingeschaltet" : "Autospeichern ausgeschaltet");
     }
 
+    private void OnToggleAllFiles(object sender, RoutedEventArgs e)
+    {
+        _settings.ShowAllFiles = MenuAllFiles.IsChecked;
+        FileScanner.ShowAllFiles = _settings.ShowAllFiles;
+        _settings.Save();
+        if (CurrentBaseDirectory is { } dir)
+            SetBaseDirectory(dir, remember: false);
+    }
+
+    // ================================================================ Befehle
+
+    /// <summary>Speichern, Suchen und Co. gibt es nur, solange der Editor zu sehen ist.</summary>
+    private void CanEdit(object sender, CanExecuteRoutedEventArgs e) => e.CanExecute = IsEditing;
+
+    private void CanSaveVersion(object sender, CanExecuteRoutedEventArgs e) =>
+        e.CanExecute = IsEditing && _path is not null;
+
+    /// <summary>Ob rechts gerade der Editor steht (und nicht ein Betrachter).</summary>
+    private bool IsEditing => true;
+
     // ================================================================ Eingabe
 
     private void OnEditorPreviewKeyDown(object sender, KeyEventArgs e)
@@ -301,13 +330,19 @@ public partial class MainWindow : Window
         string name = _path is null ? "Unbenannt" : Path.GetFileName(_path);
         Title = (_dirty ? "• " : "") + name + "  —  MarkOne";
         StatusFile.Text = _path ?? "Unbenannt";
-        ButtonVersion.IsEnabled = _path is not null;
     }
 
-    private void Flash(string message)
+    private void Flash(string message) => ShowMessage(message, Theme.Success, 4);
+
+    /// <summary>Hinweis ohne Erfolgsgrün, bleibt etwas länger stehen.</summary>
+    private void Info(string message) => ShowMessage(message, Theme.Muted, 7);
+
+    private void ShowMessage(string message, Brush color, int seconds)
     {
+        StatusMessage.Foreground = color;
         StatusMessage.Text = message;
         _messageTimer.Stop();
+        _messageTimer.Interval = TimeSpan.FromSeconds(seconds);
         _messageTimer.Start();
     }
 
@@ -340,9 +375,13 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>Das Verzeichnis, das der Baum gerade zeigt.</summary>
+    private string? CurrentBaseDirectory =>
+        _roots.Count > 0 && Directory.Exists(_roots[0].FullPath) ? _roots[0].FullPath : null;
+
     private void OnRefreshTree(object sender, ExecutedRoutedEventArgs e)
     {
-        if (_settings.BaseDirectory is { } dir && Directory.Exists(dir))
+        if (CurrentBaseDirectory is { } dir)
         {
             SetBaseDirectory(dir, remember: false);
             Flash("Navigation aktualisiert");
@@ -353,6 +392,13 @@ public partial class MainWindow : Window
     {
         if (_suppressTreeSelection) return;
         if (e.NewValue is not FileNode node) return;
+
+        if (node.Kind != FileKind.Markdown)
+        {
+            DescribeFile(node);
+            return;
+        }
+
         if (ReferenceEquals(node, _currentNode)) return;
 
         // Bereits offene Datei erneut angeklickt: nichts tun.
@@ -387,6 +433,84 @@ public partial class MainWindow : Window
         _currentNode.IsSelected = false;
         _suppressTreeSelection = false;
         _currentNode = null;
+    }
+
+    /// <summary>Statuszeile für Dateien, die MarkOne nicht selbst öffnet.</summary>
+    private void DescribeFile(FileNode node)
+    {
+        string size = "";
+        try { size = Shell.FormatSize(new FileInfo(node.FullPath).Length) + "  ·  "; } catch { }
+        string app = Shell.FriendlyAppName(node.FullPath) ?? "Standardprogramm";
+        Info($"{node.Name}  ·  {size}Doppelklick öffnet in {app}");
+    }
+
+    private void OpenExternally(string path)
+    {
+        if (Shell.Open(path))
+            Flash($"Geöffnet: {Path.GetFileName(path)}");
+        else
+            Info($"Windows kennt kein Programm für {Path.GetFileName(path)}");
+    }
+
+    /// <summary>Der Baumknoten, zu dem ein Element im Baum gehört (Klick, Doppelklick, Kontextmenü).</summary>
+    private static TreeNode? NodeAt(object? source)
+    {
+        var d = source as DependencyObject;
+        while (d is not null && d is not TreeViewItem)
+            d = d is Visual or System.Windows.Media.Media3D.Visual3D
+                ? VisualTreeHelper.GetParent(d)
+                : LogicalTreeHelper.GetParent(d);
+        return (d as TreeViewItem)?.DataContext as TreeNode;
+    }
+
+    private void OnTreeDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (NodeAt(e.OriginalSource) is not FileNode { Kind: not FileKind.Markdown } node) return;
+        OpenExternally(node.FullPath);
+        e.Handled = true;
+    }
+
+    private void OnTreeKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        if (Tree.SelectedItem is not FileNode { Kind: not FileKind.Markdown } node) return;
+        OpenExternally(node.FullPath);
+        e.Handled = true;
+    }
+
+    private void OnTreeContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        _contextNode = NodeAt(e.OriginalSource);
+        if (_contextNode is null || _contextNode is LoadingNode)
+        {
+            e.Handled = true;   // kein Menü über leerer Fläche
+            return;
+        }
+        MenuOpenExternal.Visibility = _contextNode is FileNode ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void OnOpenExternally(object sender, RoutedEventArgs e)
+    {
+        if (_contextNode is FileNode node) OpenExternally(node.FullPath);
+    }
+
+    private void OnRevealInExplorer(object sender, RoutedEventArgs e)
+    {
+        if (_contextNode is { } node) Shell.Reveal(node.FullPath);
+    }
+
+    private void OnCopyPath(object sender, RoutedEventArgs e)
+    {
+        if (_contextNode is not { } node) return;
+        try
+        {
+            Clipboard.SetText(node.FullPath);
+            Flash("Pfad kopiert");
+        }
+        catch
+        {
+            Info("Zwischenablage ist gerade belegt");
+        }
     }
 
     /// <summary>Aktualisiert die im Baum angezeigte Überschrift nach dem Speichern.</summary>
@@ -513,13 +637,7 @@ public partial class MainWindow : Window
 
     private void OnSaveVersion(object sender, ExecutedRoutedEventArgs e)
     {
-        if (_path is null)
-        {
-            MessageBox.Show(this,
-                "Das Dokument muss zuerst einmal gespeichert werden, bevor Versionen davon abgelegt werden können.",
-                "MarkOne", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
+        if (_path is null) return;   // Befehl ist ohne Pfad ohnehin abgeschaltet
 
         try
         {
