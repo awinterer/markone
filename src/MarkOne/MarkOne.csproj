@@ -10,7 +10,7 @@
     <RootNamespace>MarkOne</RootNamespace>
     <ApplicationTitle>MarkOne</ApplicationTitle>
     <ApplicationIcon>../../assets/icon/markone.ico</ApplicationIcon>
-    <Version>0.3.1</Version>
+    <Version>0.4.0</Version>
     <SelfContained>false</SelfContained>
     <!-- Nur 64-Bit-Windows: so landet genau eine pdfium.dll neben der EXE statt drei. -->
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -39,6 +39,7 @@
   <!-- PDF-Kern von Chrome als fertige Bibliothek, angesprochen über Pdfium.cs. -->
   <ItemGroup>
     <PackageReference Include="bblanchon.PDFium.Win32" Version="152.0.7961" />
+    <PackageReference Include="Markdig" Version="1.3.2" />
   </ItemGroup>
 
   <!-- Anbindung an die Edge-Engine von Windows für HTML. Nur der Lader kommt mit

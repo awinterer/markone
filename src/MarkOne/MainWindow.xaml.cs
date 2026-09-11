@@ -8,8 +8,10 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
+using System.Threading.Tasks;
 
 namespace MarkOne;
 
@@ -21,6 +23,10 @@ public partial class MainWindow : Window
         new("Als neue Version sichern", nameof(SaveVersionCommand), typeof(MainWindow));
     public static readonly RoutedUICommand RefreshTreeCommand =
         new("Navigation aktualisieren", nameof(RefreshTreeCommand), typeof(MainWindow));
+    public static readonly RoutedUICommand ExportPdfCommand =
+        new("Als PDF exportieren", nameof(ExportPdfCommand), typeof(MainWindow));
+    public static readonly RoutedUICommand ExportHtmlCommand =
+        new("Als HTML exportieren", nameof(ExportHtmlCommand), typeof(MainWindow));
 
     private static readonly Regex RxWord = new(@"[\p{L}\p{N}'’\-]+", RegexOptions.Compiled);
     private static readonly Encoding Utf8NoBom = new UTF8Encoding(false);
@@ -570,6 +576,30 @@ public partial class MainWindow : Window
             return;
         }
         MenuOpenExternal.Visibility = _contextNode is FileNode ? Visibility.Visible : Visibility.Collapsed;
+
+        bool markdown = _contextNode is FileNode { Kind: FileKind.Markdown };
+        var export = markdown ? Visibility.Visible : Visibility.Collapsed;
+        MenuExportPdf.Visibility = export;
+        MenuExportHtml.Visibility = export;
+        MenuExportSeparator.Visibility = export;
+    }
+
+    private void OnTreeExportPdf(object sender, RoutedEventArgs e) => ExportFromTree(pdf: true);
+    private void OnTreeExportHtml(object sender, RoutedEventArgs e) => ExportFromTree(pdf: false);
+
+    private void ExportFromTree(bool pdf)
+    {
+        if (_contextNode is not FileNode { Kind: FileKind.Markdown } node) return;
+        try
+        {
+            string markdown = File.ReadAllText(node.FullPath, Encoding.UTF8);
+            _ = ExportAsync(pdf, markdown, node.FullPath);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"Datei konnte nicht gelesen werden:\n\n{ex.Message}",
+                "MarkOne", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private void OnOpenExternally(object sender, RoutedEventArgs e)
@@ -660,6 +690,99 @@ public partial class MainWindow : Window
             MessageBox.Show(this, $"Datei konnte nicht geöffnet werden:\n\n{ex.Message}",
                 "MarkOne", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
+    }
+
+    // ================================================================ Export
+
+    private void OnExportPdf(object sender, ExecutedRoutedEventArgs e) => _ = ExportAsync(pdf: true, GetDocumentText(), _path);
+    private void OnExportHtml(object sender, ExecutedRoutedEventArgs e) => _ = ExportAsync(pdf: false, GetDocumentText(), _path);
+
+    /// <summary>Fragt nach dem Ziel, wandelt um und zeigt das Ergebnis im Baum.</summary>
+    private async Task ExportAsync(bool pdf, string markdown, string? sourcePath)
+    {
+        string extension = pdf ? ".pdf" : ".html";
+        string stem = sourcePath is null ? "Unbenannt" : Path.GetFileNameWithoutExtension(sourcePath);
+        string? folder = sourcePath is null ? null : Path.GetDirectoryName(sourcePath);
+
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = pdf ? "Als PDF exportieren" : "Als HTML exportieren",
+            Filter = pdf ? "PDF (*.pdf)|*.pdf" : "HTML (*.html)|*.html",
+            DefaultExt = extension,
+            FileName = stem + extension,
+            InitialDirectory = folder ?? "",
+        };
+        if (dialog.ShowDialog(this) != true) return;
+
+        string target = dialog.FileName;
+        string title = MarkdownExport.Title(markdown, stem);
+
+        try
+        {
+            if (pdf)
+            {
+                Info("PDF wird erstellt …");
+                var hwnd = new WindowInteropHelper(this).Handle;
+                string? error = await MarkdownExport.ToPdfAsync(markdown, folder, title, target, hwnd);
+                if (error is not null)
+                {
+                    MessageBox.Show(this, "PDF konnte nicht erstellt werden.\n\n" + error,
+                        "MarkOne", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+            }
+            else
+            {
+                MarkdownExport.SaveHtml(markdown, title, target);
+            }
+
+            Flash($"Exportiert: {Path.GetFileName(target)}");
+            await RefreshFolderAsync(Path.GetDirectoryName(target));
+
+            // Liegt das Ergebnis gerade im Betrachter, frisch nachladen.
+            if (_pane == Pane.Pdf && string.Equals(_viewPath, target, StringComparison.OrdinalIgnoreCase))
+                Pdfs.Load(target);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"Export fehlgeschlagen:\n\n{ex.Message}",
+                "MarkOne", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    /// <summary>Liest einen Ordner im Baum neu ein, wenn er dort schon offen ist, und hält die Auswahl.</summary>
+    private async Task RefreshFolderAsync(string? directory)
+    {
+        if (directory is null) return;
+        if (FindFolder(_roots, directory) is not { IsLoaded: true } folder) return;
+
+        await folder.LoadAsync(force: true);
+
+        foreach (var child in folder.Children)
+        {
+            if (child is not FileNode file) continue;
+            bool isDocument = _path is not null && string.Equals(file.FullPath, _path, StringComparison.OrdinalIgnoreCase);
+            bool isViewed = _viewPath is not null && string.Equals(file.FullPath, _viewPath, StringComparison.OrdinalIgnoreCase);
+            if (!isDocument && !isViewed) continue;
+
+            _suppressTreeSelection = true;
+            file.IsSelected = true;
+            _suppressTreeSelection = false;
+            if (isDocument) _currentNode = file;
+        }
+    }
+
+    private static FolderNode? FindFolder(System.Collections.Generic.IEnumerable<TreeNode> nodes, string directory)
+    {
+        foreach (var node in nodes)
+        {
+            if (node is not FolderNode folder) continue;
+            if (string.Equals(folder.FullPath.TrimEnd(Path.DirectorySeparatorChar), directory.TrimEnd(Path.DirectorySeparatorChar),
+                    StringComparison.OrdinalIgnoreCase))
+                return folder;
+            if (folder.IsLoaded && FindFolder(folder.Children, directory) is { } found) return found;
+        }
+        return null;
     }
 
     private bool SaveTo(string path)

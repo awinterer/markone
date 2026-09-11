@@ -67,6 +67,9 @@ public sealed class FolderNode : TreeNode
 
     protected override void OnExpanded() => _ = LoadAsync();
 
+    /// <summary>Ob der Inhalt schon einmal eingelesen wurde.</summary>
+    public bool IsLoaded => _loaded;
+
     public async Task LoadAsync(bool force = false)
     {
         if (_loading || (_loaded && !force)) return;

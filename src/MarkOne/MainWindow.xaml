@@ -78,6 +78,7 @@
         <KeyBinding Key="F" Modifiers="Ctrl" Command="ApplicationCommands.Find" />
         <KeyBinding Key="H" Modifiers="Ctrl" Command="ApplicationCommands.Replace" />
         <KeyBinding Key="F5" Command="{x:Static local:MainWindow.RefreshTreeCommand}" />
+        <KeyBinding Key="P" Modifiers="Ctrl+Shift" Command="{x:Static local:MainWindow.ExportPdfCommand}" />
     </Window.InputBindings>
 
     <Window.CommandBindings>
@@ -90,6 +91,8 @@
         <CommandBinding Command="{x:Static local:MainWindow.OpenFolderCommand}" Executed="OnOpenFolder" />
         <CommandBinding Command="{x:Static local:MainWindow.SaveVersionCommand}" Executed="OnSaveVersion" CanExecute="CanSaveVersion" />
         <CommandBinding Command="{x:Static local:MainWindow.RefreshTreeCommand}" Executed="OnRefreshTree" />
+        <CommandBinding Command="{x:Static local:MainWindow.ExportPdfCommand}" Executed="OnExportPdf" CanExecute="CanEdit" />
+        <CommandBinding Command="{x:Static local:MainWindow.ExportHtmlCommand}" Executed="OnExportHtml" CanExecute="CanEdit" />
     </Window.CommandBindings>
 
     <DockPanel>
@@ -108,6 +111,9 @@
                         <MenuItem Header="_Speichern"        Command="ApplicationCommands.Save"   InputGestureText="Strg+S" />
                         <MenuItem Header="Speichern _unter…" Command="ApplicationCommands.SaveAs" InputGestureText="Strg+Umschalt+S" />
                         <MenuItem Header="Als neue _Version sichern" Command="{x:Static local:MainWindow.SaveVersionCommand}" InputGestureText="Strg+Alt+S" />
+                        <Separator />
+                        <MenuItem Header="Als _PDF exportieren…"  Command="{x:Static local:MainWindow.ExportPdfCommand}"  InputGestureText="Strg+Umschalt+P" />
+                        <MenuItem Header="Als _HTML exportieren…" Command="{x:Static local:MainWindow.ExportHtmlCommand}" />
                         <Separator />
                         <MenuItem Header="_Beenden" Click="OnExit" />
                     </MenuItem>
@@ -151,6 +157,10 @@
                     <Rectangle Style="{StaticResource ToolSeparator}" />
                     <Button Style="{StaticResource ToolButton}" Tag="&#xE721;" Content="Suchen"
                             Command="ApplicationCommands.Find" ToolTip="Suchen und Ersetzen (Strg+F)" />
+                    <Rectangle Style="{StaticResource ToolSeparator}" />
+                    <Button Style="{StaticResource ToolButton}" Tag="&#xE7C3;" Content="PDF"
+                            Command="{x:Static local:MainWindow.ExportPdfCommand}"
+                            ToolTip="Das Dokument als PDF exportieren (Strg+Umschalt+P)" />
                 </StackPanel>
 
             </DockPanel>
@@ -201,6 +211,9 @@
                               ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                         <TreeView.ContextMenu>
                             <ContextMenu>
+                                <MenuItem x:Name="MenuExportPdf"  Header="Als _PDF exportieren…"  Click="OnTreeExportPdf" />
+                                <MenuItem x:Name="MenuExportHtml" Header="Als _HTML exportieren…" Click="OnTreeExportHtml" />
+                                <Separator x:Name="MenuExportSeparator" />
                                 <MenuItem x:Name="MenuOpenExternal" Header="Im _Standardprogramm öffnen" Click="OnOpenExternally" />
                                 <MenuItem Header="Im _Explorer anzeigen" Click="OnRevealInExplorer" />
                                 <Separator />

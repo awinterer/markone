@@ -29,7 +29,7 @@ public partial class HtmlViewer : UserControl
     private long _size;
     private int _loadId;
 
-    private static readonly string UserDataFolder = Path.Combine(
+    internal static readonly string UserDataFolder = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MarkOne", "WebView2");
 
     public HtmlViewer()
@@ -178,23 +178,7 @@ public partial class HtmlViewer : UserControl
     /// </summary>
     private static string DefaultStyleScript()
     {
-        static string Hex(SolidColorBrush b) => $"#{b.Color.R:X2}{b.Color.G:X2}{b.Color.B:X2}";
-
-        string css =
-            $"body{{font-family:Georgia,Cambria,serif;font-size:{Theme.BaseSize}px;line-height:1.7;" +
-            $"color:{Hex(Theme.Text)};background:{Hex(Theme.Paper)};max-width:{Theme.MaxColumnWidth}px;" +
-            "margin:34px auto;padding:0 40px}" +
-            $"h1,h2,h3,h4,h5,h6{{color:{Hex(Theme.Heading)};line-height:1.35;margin:1.4em 0 .5em}}" +
-            "h1{font-size:30px}h2{font-size:24px}h3{font-size:20px}" +
-            $"a{{color:{Hex(Theme.Link)}}}" +
-            $"code,pre,kbd{{font-family:'Cascadia Mono',Consolas,monospace;font-size:{Theme.CodeSize}px;" +
-            $"color:{Hex(Theme.Code)};background:{Hex(Theme.CodeBg)}}}" +
-            "code{padding:1px 4px;border-radius:3px}pre{padding:12px 14px;border-radius:4px;overflow-x:auto}" +
-            $"blockquote{{color:{Hex(Theme.Quote)};border-left:3px solid {Hex(Theme.QuoteBar)};margin-left:0;padding-left:16px}}" +
-            $"table{{border-collapse:collapse}}td,th{{border:1px solid {Hex(Theme.Rule)};padding:4px 10px;text-align:left}}" +
-            $"th{{background:{Hex(Theme.CodeBg)}}}img{{max-width:100%;height:auto}}" +
-            $"hr{{border:0;border-top:1px solid {Hex(Theme.Rule)}}}";
-
+        string css = HtmlStyle.Screen();
         return
             "document.addEventListener('DOMContentLoaded',function(){" +
             "if(document.querySelector('link[rel~=\"stylesheet\"],style')||(document.body&&document.body.getAttribute('style')))return;" +

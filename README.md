@@ -77,6 +77,31 @@ Der Editor bleibt im Hintergrund erhalten, solange ein Bild, PDF oder HTML
 zu sehen ist. Ein Klick auf die offene Markdown-Datei holt ihn ohne Neuladen
 zurück. Speichern, Suchen und Versionen sind in der Zeit abgeschaltet.
 
+**Export nach PDF und HTML.** Über *Datei*, den Knopf *PDF* in der
+Kopfzeile, Strg+Umschalt+P oder per Rechtsklick auf eine Markdown-Datei im
+Baum. Der Editor exportiert den aktuellen Text, auch ungespeichert; der Baum
+die Datei, ohne sie zu öffnen. Die Umwandlung übernimmt Markdig (CommonMark
+mit Tabellen, Fußnoten, Aufgabenlisten), das PDF druckt die Edge-Engine
+unsichtbar im Hintergrund: A4, 20 mm Rand, Georgia 11 Punkt, Kopfzeile mit
+Datum und Titel, Seitenzahlen im Fuß, Text durchsuchbar, Bilder eingebettet.
+Jede Zeile bleibt eine Zeile, so wie sie im Editor steht. Pfade mit
+Leerzeichen in Links und Bildern sind erlaubt, auch wenn CommonMark das
+eigentlich nicht vorsieht. Das fertige PDF erscheint im Baum und lässt sich
+gleich prüfen.
+
+Dasselbe geht ohne Fenster von der Kommandozeile, etwa aus Skripten:
+
+```bash
+MarkOne.exe --pdf notizen.md
+```
+
+```bash
+MarkOne.exe --html notizen.md ziel.html
+```
+
+Ohne Zielangabe entsteht die Datei neben der Quelle. Rückgabewert 0 bei
+Erfolg, der Pfad steht auf der Konsole.
+
 **Absturzsicherung.** Drei Sekunden nach der letzten Eingabe schreibt MarkOne
 eine Arbeitskopie nach `%APPDATA%\MarkOne\recovery\`. Die Originaldatei bleibt
 unberührt, bis du bewusst speicherst. Beim nächsten Start meldet sich ein
@@ -90,7 +115,8 @@ erscheint nicht in der Navigation.
 ## Bauen
 
 Voraussetzung ist das .NET 9 SDK. Gebaut wird für 64-Bit-Windows, damit
-genau eine `pdfium.dll` neben der EXE liegt.
+genau eine `pdfium.dll` neben der EXE liegt. Die Pakete kommen von nuget.org;
+die Quelle steht in `nuget.config` im Repository.
 
 ```bash
 dotnet publish src/MarkOne/MarkOne.csproj -c Release -o dist
@@ -120,6 +146,7 @@ dist\MarkOne.exe pfad\zur\datei.md
 | `Strg+Alt+S` | Als neue Version in `.versions` sichern |
 | `Strg+F` | Suchen |
 | `Strg+H` | Ersetzen |
+| `Strg+Umschalt+P` | Als PDF exportieren |
 | `Strg+Z` / `Strg+Y` | Rückgängig / Wiederholen |
 | `F5` | Navigation neu einlesen |
 | `Enter` / Doppelklick im Baum | Datei im zugehörigen Programm öffnen |
@@ -172,6 +199,8 @@ Bilddateien bei.
 | `PdfDocument.cs` | Ein geöffnetes PDF: Seitengrößen, Seiten zeichnen |
 | `Pdfium.cs` | Die Handvoll PDFium-Aufrufe und der eine Thread dafür |
 | `HtmlViewer.xaml(.cs)` | HTML über die Edge-Engine, nur solange sie gebraucht wird |
+| `MarkdownExport.cs` | Markdown nach HTML (Markdig) und PDF (Edge-Engine, unsichtbar) |
+| `HtmlStyle.cs` | Die Typografie des Editors als CSS für Bildschirm und Papier |
 | `Settings.cs` | Was zwischen zwei Starts erhalten bleibt |
 | `Recovery.cs` | Absturzsicherung |
 | `Versioning.cs` | Nummerierte Zwischenstände |
@@ -192,6 +221,7 @@ größere Mengen Text eingefügt werden.
 | `%APPDATA%\MarkOne\settings.json` | Basisverzeichnis, Fenstergröße, Baumbreite, Autospeichern |
 | `%APPDATA%\MarkOne\recovery\` | Arbeitskopien der Absturzsicherung |
 | `%LOCALAPPDATA%\MarkOne\WebView2\` | Zwischenspeicher der Edge-Engine für HTML |
+| `%LOCALAPPDATA%\MarkOne\export\` | Die Zwischenseite des PDF-Exports |
 | `<Dokumentordner>\.versions\` | Nummerierte Versionen, versteckt |
 
 ## Messwerte
@@ -200,7 +230,7 @@ Gemessen auf einem Windows-11-Rechner mit 20 Kernen:
 
 | | MarkOne | Ghostwriter | Windows Notepad |
 |---|---|---|---|
-| Speicherplatz | **8,5 MB** (0,3 MB ohne PDF- und HTML-Anbindung) | 431 MB | (Systembestandteil) |
+| Speicherplatz | **9,0 MB** (0,3 MB ohne PDF-Kern, HTML-Anbindung und Markdig) | 431 MB | (Systembestandteil) |
 | Startzeit | **~460 ms** | — | — |
 | Arbeitsspeicher | 289 MB | 200 MB | 210 MB |
 | Arbeitsspeicher mit offener HTML-Datei | rund 650 MB, davon 350 MB Edge | | |
@@ -231,6 +261,10 @@ Technologiebasis (Win32/C++), nicht ein kleineres Programm.
 - **Bilder:** animierte GIFs zeigen das erste Bild, SVG wird nicht dargestellt.
 - **HTML:** Tastenkürzel von MarkOne greifen nicht, solange die Seite den
   Fokus hat; erst wieder nach einem Klick in Baum oder Kopfzeile.
+- **Export:** Bilder müssen auf demselben Laufwerk liegen und relativ oder
+  ohne `file://` angegeben sein; Formeln und Diagramme werden nicht gesetzt.
+  Der PDF-Export braucht die WebView2-Laufzeit von Windows 11 und dauert
+  ein paar Sekunden, weil die Engine dafür startet.
 - Kein Dark Mode.
 
 ## Verhältnis zu Ghostwriter
