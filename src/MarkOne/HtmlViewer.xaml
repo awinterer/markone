@@ -1,0 +1,19 @@
+<UserControl x:Class="MarkOne.HtmlViewer"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Focusable="True"
+             Background="{DynamicResource Brush.Paper}"
+             PreviewKeyDown="OnKeyDown">
+
+    <Grid>
+        <!-- Die Edge-Engine wird erst eingehängt, wenn eine HTML-Datei zu sehen ist,
+             und beim Verlassen wieder entsorgt. -->
+        <Border x:Name="Host" />
+
+        <TextBlock x:Name="Message" HorizontalAlignment="Center" VerticalAlignment="Center"
+                   FontFamily="{DynamicResource Font.Ui}" FontSize="13"
+                   Foreground="{DynamicResource Brush.Muted}"
+                   TextWrapping="Wrap" TextAlignment="Center" MaxWidth="520"
+                   Visibility="Collapsed" />
+    </Grid>
+</UserControl>

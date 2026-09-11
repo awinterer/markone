@@ -61,6 +61,7 @@ public partial class MainWindow : Window
         Tree.ItemsSource = _roots;
         Images.StatusChanged += (_, _) => { if (_pane == Pane.Image) StatusCount.Text = Images.Status; };
         Pdfs.StatusChanged += (_, _) => { if (_pane == Pane.Pdf) StatusCount.Text = Pdfs.Status; };
+        Html.StatusChanged += (_, _) => { if (_pane == Pane.Html) StatusCount.Text = Html.Status; };
 
         DataObject.AddPastingHandler(Editor, OnPaste);
 
@@ -292,7 +293,16 @@ public partial class MainWindow : Window
 
     // ============================================================ Betrachter
 
-    private enum Pane { Editor, Image, Pdf }
+    private enum Pane { Editor, Image, Pdf, Html }
+
+    /// <summary>Welcher Betrachter für eine Dateiart zuständig ist; null heißt Editor oder Fremdprogramm.</summary>
+    private static Pane? PaneFor(FileKind kind) => kind switch
+    {
+        FileKind.Image => Pane.Image,
+        FileKind.Pdf => Pane.Pdf,
+        FileKind.Html => Pane.Html,
+        _ => null,
+    };
 
     /// <summary>Zurück zum Editor; das dort geladene Dokument bleibt, wie es war.</summary>
     private void ShowEditor()
@@ -303,8 +313,10 @@ public partial class MainWindow : Window
             _viewPath = null;
             Images.Visibility = Visibility.Collapsed;
             Pdfs.Visibility = Visibility.Collapsed;
+            Html.Visibility = Visibility.Collapsed;
             Images.Clear();
             Pdfs.Clear();
+            Html.Clear();
             Editor.Visibility = Visibility.Visible;
             UpdateTitle();
             UpdateWordCount();
@@ -313,9 +325,6 @@ public partial class MainWindow : Window
         Editor.Focus();
     }
 
-    private void ShowImage(string path) => ShowViewer(Pane.Image, path);
-    private void ShowPdf(string path) => ShowViewer(Pane.Pdf, path);
-
     private void ShowViewer(Pane pane, string path)
     {
         _pane = pane;
@@ -323,18 +332,18 @@ public partial class MainWindow : Window
         Editor.Visibility = Visibility.Collapsed;
         Images.Visibility = pane == Pane.Image ? Visibility.Visible : Visibility.Collapsed;
         Pdfs.Visibility = pane == Pane.Pdf ? Visibility.Visible : Visibility.Collapsed;
+        Html.Visibility = pane == Pane.Html ? Visibility.Visible : Visibility.Collapsed;
 
-        if (pane == Pane.Image)
+        // Die anderen Betrachter geben ihren Speicher ab.
+        if (pane != Pane.Image) Images.Clear();
+        if (pane != Pane.Pdf) Pdfs.Clear();
+        if (pane != Pane.Html) Html.Clear();
+
+        switch (pane)
         {
-            Pdfs.Clear();
-            Images.Load(path);
-            Images.Focus();
-        }
-        else
-        {
-            Images.Clear();
-            Pdfs.Load(path);
-            Pdfs.Focus();
+            case Pane.Image: Images.Load(path); Images.Focus(); break;
+            case Pane.Pdf: Pdfs.Load(path); Pdfs.Focus(); break;
+            case Pane.Html: Html.Load(path); Html.Focus(); break;
         }
 
         UpdateTitle();
@@ -456,17 +465,15 @@ public partial class MainWindow : Window
         if (_suppressTreeSelection) return;
         if (e.NewValue is not FileNode node) return;
 
-        switch (node.Kind)
+        if (PaneFor(node.Kind) is { } pane)
         {
-            case FileKind.Image:
-                ShowImage(node.FullPath);
-                return;
-            case FileKind.Pdf:
-                ShowPdf(node.FullPath);
-                return;
-            case FileKind.Other:
-                DescribeFile(node);
-                return;
+            ShowViewer(pane, node.FullPath);
+            return;
+        }
+        if (node.Kind == FileKind.Other)
+        {
+            DescribeFile(node);
+            return;
         }
 
         // Bereits offene Datei erneut angeklickt: nur den Editor nach vorn holen.
@@ -630,18 +637,10 @@ public partial class MainWindow : Window
     /// <summary>Öffnet eine Datei so, wie es zu ihr passt: Editor oder Betrachter.</summary>
     public void LoadFile(string path)
     {
-        switch (FileScanner.KindOf(path))
-        {
-            case FileKind.Image:
-                ShowImage(path);
-                return;
-            case FileKind.Pdf:
-                ShowPdf(path);
-                return;
-            default:
-                LoadDocument(path);
-                return;
-        }
+        if (PaneFor(FileScanner.KindOf(path)) is { } pane)
+            ShowViewer(pane, path);
+        else
+            LoadDocument(path);
     }
 
     private void LoadDocument(string path)
@@ -765,20 +764,20 @@ public partial class MainWindow : Window
         string images = string.Join(";", FileScanner.ImageExtensions.Select(x => "*" + x));
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Filter = $"Alles, was MarkOne zeigt|*.md;*.markdown;*.txt;*.pdf;{images}"
+            Filter = $"Alles, was MarkOne zeigt|*.md;*.markdown;*.txt;*.pdf;*.html;*.htm;{images}"
                    + "|Markdown (*.md;*.markdown;*.txt)|*.md;*.markdown;*.txt"
                    + "|PDF (*.pdf)|*.pdf"
+                   + "|HTML (*.html;*.htm)|*.html;*.htm;*.xhtml"
                    + $"|Bilder|{images}"
                    + "|Alle Dateien (*.*)|*.*",
         };
         if (dialog.ShowDialog(this) != true) return;
 
         string path = dialog.FileName;
-        var kind = FileScanner.KindOf(path);
-        if (kind is FileKind.Image or FileKind.Pdf)
+        if (PaneFor(FileScanner.KindOf(path)) is { } pane)
         {
             DeselectTree();
-            ShowViewer(kind == FileKind.Image ? Pane.Image : Pane.Pdf, path);
+            ShowViewer(pane, path);
             return;
         }
 

@@ -232,6 +232,7 @@
                              PreviewKeyDown="OnEditorPreviewKeyDown" />
                 <local:ImageViewer x:Name="Images" Visibility="Collapsed" />
                 <local:PdfViewer x:Name="Pdfs" Visibility="Collapsed" />
+                <local:HtmlViewer x:Name="Html" Visibility="Collapsed" />
             </Grid>
         </Grid>
 

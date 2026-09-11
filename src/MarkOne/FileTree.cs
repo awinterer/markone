@@ -102,6 +102,8 @@ public enum FileKind
     Image,
     /// <summary>PDF: wird im eingebauten Betrachter gezeigt.</summary>
     Pdf,
+    /// <summary>HTML: wird mit der Edge-Engine von Windows gezeigt.</summary>
+    Html,
     /// <summary>Alles andere: öffnet per Doppelklick im zugehörigen Programm.</summary>
     Other,
 }
@@ -150,6 +152,7 @@ public static class FileScanner
     };
 
     public static readonly string[] PdfExtensions = { ".pdf" };
+    public static readonly string[] HtmlExtensions = { ".html", ".htm", ".xhtml" };
 
     /// <summary>Zeigt der Baum alle Dateien oder nur die, die MarkOne selbst öffnet?</summary>
     public static bool ShowAllFiles { get; set; } = true;
@@ -181,6 +184,7 @@ public static class FileScanner
         if (Has(MarkdownExtensions, ext)) return FileKind.Markdown;
         if (Has(ImageExtensions, ext)) return FileKind.Image;
         if (Has(PdfExtensions, ext)) return FileKind.Pdf;
+        if (Has(HtmlExtensions, ext)) return FileKind.Html;
         return FileKind.Other;
     }
 

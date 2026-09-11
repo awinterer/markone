@@ -6,9 +6,9 @@
 
 **Ein kleiner Markdown-Editor für Windows.** Schlank wie Notepad, aber mit
 lesbarer Typografie und einer Navigation, die deine Notizen nach Überschriften
-statt nach Dateinamen sortiert zeigt. Bilder und PDF-Dateien aus demselben
-Ordner zeigt MarkOne gleich mit an, alles andere öffnet es im zugehörigen
-Programm.
+statt nach Dateinamen sortiert zeigt. Bilder, PDF- und HTML-Dateien aus
+demselben Ordner zeigt MarkOne gleich mit an, alles andere öffnet es im
+zugehörigen Programm.
 
 Einspaltig und live gestylt: Du tippst Markdown, die Formatierung erscheint
 sofort. Die Markdown-Zeichen (`##`, `**`) bleiben sichtbar, treten aber in
@@ -23,7 +23,9 @@ für eine Aufgabe, die keine braucht.
 
 MarkOne rendert nativ mit WPF. Der Editor selbst ist rund **300 KB** groß;
 dazu kommen 7,2 MB für den PDF-Kern von Chrome (PDFium), der ohne Browser
-auskommt.
+auskommt, und 0,9 MB Anbindung an die Edge-Engine von Windows für HTML.
+Die Engine selbst gehört zu Windows 11 und wird nur gestartet, solange
+eine HTML-Datei zu sehen ist.
 
 ## Was es kann
 
@@ -60,9 +62,20 @@ Die Datei wird beim Öffnen vollständig gelesen und bleibt auf der Platte
 nicht gesperrt: Ein aus Word neu exportiertes PDF lässt sich einfach neu
 anklicken.
 
-Der Editor bleibt im Hintergrund erhalten, solange ein Bild oder PDF zu sehen
-ist. Ein Klick auf die offene Markdown-Datei holt ihn ohne Neuladen zurück.
-Speichern, Suchen und Versionen sind in der Zeit abgeschaltet.
+**HTML.** Für HTML braucht es eine echte Rendering-Engine, und die einzige
+brauchbare unter Windows ist die von Edge (WebView2), die auf jedem
+Windows 11 liegt. MarkOne startet sie erst, wenn eine HTML-Datei angeklickt
+wird, und beendet sie wieder, sobald etwas anderes zu sehen ist. Während
+eine Seite offen ist, kostet das rund 350 MB Arbeitsspeicher in sechs
+Edge-Prozessen; danach ist alles wieder frei. Links ins Netz öffnen im
+Browser, lokale Links zu HTML, Text und Bildern bleiben in MarkOne, andere
+lokale Dateien werden nicht angefasst, Downloads gibt es nicht. Eine Seite
+ohne eigenes Stylesheet bekommt die Typografie des Editors, eine mit
+eigenem Layout bleibt unangetastet. Strg+Mausrad zoomt.
+
+Der Editor bleibt im Hintergrund erhalten, solange ein Bild, PDF oder HTML
+zu sehen ist. Ein Klick auf die offene Markdown-Datei holt ihn ohne Neuladen
+zurück. Speichern, Suchen und Versionen sind in der Zeit abgeschaltet.
 
 **Absturzsicherung.** Drei Sekunden nach der letzten Eingabe schreibt MarkOne
 eine Arbeitskopie nach `%APPDATA%\MarkOne\recovery\`. Die Originaldatei bleibt
@@ -116,7 +129,7 @@ Im Bild- und PDF-Betrachter:
 | Kürzel | Funktion |
 |---|---|
 | `Strg+Mausrad` | Zoomen um den Mauszeiger |
-| `Strg+0` | Einpassen (Bild) bzw. Seitenbreite (PDF) |
+| `Strg+0` | Einpassen (Bild), Seitenbreite (PDF), 100 % (HTML) |
 | `Strg+1` | 100 % |
 | `Strg++` / `Strg+-` | Größer / kleiner |
 | Doppelklick (Bild) | Einpassen und 100 % wechseln |
@@ -158,6 +171,7 @@ Bilddateien bei.
 | `PdfViewer.xaml(.cs)` | PDF-Betrachter: Seitenlayout, Zoom, Zeichnen nach Bedarf |
 | `PdfDocument.cs` | Ein geöffnetes PDF: Seitengrößen, Seiten zeichnen |
 | `Pdfium.cs` | Die Handvoll PDFium-Aufrufe und der eine Thread dafür |
+| `HtmlViewer.xaml(.cs)` | HTML über die Edge-Engine, nur solange sie gebraucht wird |
 | `Settings.cs` | Was zwischen zwei Starts erhalten bleibt |
 | `Recovery.cs` | Absturzsicherung |
 | `Versioning.cs` | Nummerierte Zwischenstände |
@@ -177,6 +191,7 @@ größere Mengen Text eingefügt werden.
 |---|---|
 | `%APPDATA%\MarkOne\settings.json` | Basisverzeichnis, Fenstergröße, Baumbreite, Autospeichern |
 | `%APPDATA%\MarkOne\recovery\` | Arbeitskopien der Absturzsicherung |
+| `%LOCALAPPDATA%\MarkOne\WebView2\` | Zwischenspeicher der Edge-Engine für HTML |
 | `<Dokumentordner>\.versions\` | Nummerierte Versionen, versteckt |
 
 ## Messwerte
@@ -185,9 +200,10 @@ Gemessen auf einem Windows-11-Rechner mit 20 Kernen:
 
 | | MarkOne | Ghostwriter | Windows Notepad |
 |---|---|---|---|
-| Speicherplatz | **7,6 MB** (0,3 MB ohne PDF-Kern) | 431 MB | (Systembestandteil) |
+| Speicherplatz | **8,5 MB** (0,3 MB ohne PDF- und HTML-Anbindung) | 431 MB | (Systembestandteil) |
 | Startzeit | **~460 ms** | — | — |
 | Arbeitsspeicher | 289 MB | 200 MB | 210 MB |
+| Arbeitsspeicher mit offener HTML-Datei | rund 650 MB, davon 350 MB Edge | | |
 
 Der Platzbedarf-Unterschied ist echt und groß. Beim **Arbeitsspeicher gibt es
 keinen Vorteil** — rund 200 MB sind die Grundlast von .NET und WPF, unabhängig
@@ -213,6 +229,8 @@ Technologiebasis (Win32/C++), nicht ein kleineres Programm.
   eingepasste Seite rund 15 MB Arbeitsspeicher, gehalten werden die
   sichtbaren Seiten plus je eine davor und danach.
 - **Bilder:** animierte GIFs zeigen das erste Bild, SVG wird nicht dargestellt.
+- **HTML:** Tastenkürzel von MarkOne greifen nicht, solange die Seite den
+  Fokus hat; erst wieder nach einem Klick in Baum oder Kopfzeile.
 - Kein Dark Mode.
 
 ## Verhältnis zu Ghostwriter
