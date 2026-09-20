@@ -13,6 +13,13 @@ public sealed class LineInfo
 {
     public bool InCodeBlock { get; set; }
     public bool IsFence { get; set; }
+    public bool IsTable { get; set; }
+
+    /// <summary>Die Zeile beginnt mit einem Strich, ob sie nun zu einer gültigen Tabelle gehört oder nicht.</summary>
+    public bool LooksTable { get; set; }
+
+    /// <summary>Erste Zeile des Blocks aus Strich-Zeilen. Erspart den Nachbarn die Suche nach oben.</summary>
+    public Paragraph? TableFirst { get; set; }
 }
 
 public static class MarkdownStyler
@@ -22,6 +29,12 @@ public static class MarkdownStyler
     private static readonly Regex RxRule = new(@"^\s*([-*_])(\s*\1){2,}\s*$", RegexOptions.Compiled);
     private static readonly Regex RxQuote = new(@"^([ \t]*(?:>[ \t]?)+)(.*)$", RegexOptions.Compiled);
     private static readonly Regex RxList = new(@"^([ \t]*)([-*+]|\d{1,9}[.)])([ \t]+)(.*)$", RegexOptions.Compiled);
+
+    // Tabellen: | a | b | mit einer Trennzeile |---|---| als zweiter Zeile.
+    private static readonly Regex RxTableDelimiter = new(@"^\s{0,3}\|(\s*:?-+:?\s*\|)+\s*(:?-+:?\s*)?$", RegexOptions.Compiled);
+    private static readonly Regex RxCellSplit = new(@"(?<!\\)\|", RegexOptions.Compiled);
+
+    private enum TableRole { Header, Delimiter, Body }
 
     // Reihenfolge zählt: **fett** muss vor *kursiv* geprüft werden.
     private static readonly Regex RxInline = new(
@@ -34,7 +47,141 @@ public static class MarkdownStyler
 
     /// <summary>Enthält die Zeile überhaupt Zeichen, die Formatierung auslösen könnten?</summary>
     public static bool HasAnyMarkup(string text) =>
-        text.AsSpan().IndexOfAny("#*_`[~>-".AsSpan()) >= 0 || text.Length > 0 && char.IsDigit(text[0]);
+        text.AsSpan().IndexOfAny("#*_`[~>-|".AsSpan()) >= 0 || text.Length > 0 && char.IsDigit(text[0]);
+
+    // ============================================================== Tabellen
+
+    /// <summary>Beginnt die Zeile mit einem senkrechten Strich und hat noch mindestens einen?</summary>
+    public static bool LooksLikeTableRow(string text)
+    {
+        var t = text.AsSpan().TrimStart();
+        return t.Length > 1 && t[0] == '|' && t[1..].IndexOf('|') >= 0;
+    }
+
+    private static bool IsTableLine(Block? block) =>
+        block is Paragraph p && LooksLikeTableRow(GetText(p));
+
+    /// <summary>
+    /// Welche Rolle spielt der Absatz in seiner Tabelle? Null, wenn der Block keine
+    /// gültige Tabelle ist, also die Trennzeile als zweite Zeile fehlt.
+    /// </summary>
+    private static TableRole? RoleOf(Paragraph paragraph, LineInfo info, out bool isLast)
+    {
+        isLast = !IsTableLine(paragraph.NextBlock);
+
+        Paragraph first = FirstOfBlock(paragraph);
+        info.TableFirst = first;
+
+        if (first.NextBlock is not Paragraph second || !RxTableDelimiter.IsMatch(GetText(second)))
+            return null;
+
+        if (ReferenceEquals(paragraph, first)) return TableRole.Header;
+        if (ReferenceEquals(paragraph, second)) return TableRole.Delimiter;
+        return TableRole.Body;
+    }
+
+    /// <summary>
+    /// Erste Zeile des zusammenhängenden Blocks. Die Zeile darüber hat sie sich gemerkt,
+    /// sofern sie frisch formatiert ist; sonst wird nach oben gesucht.
+    /// </summary>
+    private static Paragraph FirstOfBlock(Paragraph paragraph)
+    {
+        if (!IsTableLine(paragraph.PreviousBlock)) return paragraph;
+
+        if (paragraph.PreviousBlock is Paragraph { Tag: LineInfo { TableFirst: { Parent: not null } hint } }
+            && LooksLikeTableRow(GetText(hint)) && !IsTableLine(hint.PreviousBlock))
+            return hint;
+
+        Paragraph first = paragraph;
+        while (IsTableLine(first.PreviousBlock)) first = (Paragraph)first.PreviousBlock;
+        return first;
+    }
+
+    /// <summary>
+    /// Formatiert den Absatz unter dem Cursor neu. Die ganze Tabelle geht nur dann mit, wenn
+    /// sich ihr Aufbau geändert haben kann: Die Zeile ist neu in der Tabelle, fällt heraus,
+    /// oder sie ist Kopf- oder Trennzeile. Denn eine Zeile bekommt ihre Rolle von den
+    /// Nachbarn; erst die Trennzeile macht aus der Zeile darüber eine Kopfzeile.
+    /// </summary>
+    public static void ApplyAtCaret(Paragraph paragraph)
+    {
+        var info = paragraph.Tag as LineInfo;
+        bool inCode = info?.InCodeBlock ?? false;
+        bool looks = !inCode && LooksLikeTableRow(GetText(paragraph));
+
+        bool nearTop = looks && (!IsTableLine(paragraph.PreviousBlock) || !IsTableLine(paragraph.PreviousBlock?.PreviousBlock));
+        if (looks != (info?.LooksTable ?? false) || nearTop)
+            RestyleTableAround(paragraph);
+        else
+            Apply(paragraph, inCode);
+    }
+
+    /// <summary>Formatiert den Absatz und alle Strich-Zeilen darüber und darunter, von oben nach unten.</summary>
+    public static void RestyleTableAround(Paragraph paragraph)
+    {
+        var rows = new List<Paragraph>();
+        for (var p = paragraph.PreviousBlock as Paragraph; p is not null && LooksLikeTableRow(GetText(p)); p = p.PreviousBlock as Paragraph)
+            rows.Add(p);
+        rows.Reverse();
+        rows.Add(paragraph);
+        for (var p = paragraph.NextBlock as Paragraph; p is not null && LooksLikeTableRow(GetText(p)); p = p.NextBlock as Paragraph)
+            rows.Add(p);
+
+        foreach (var p in rows)
+            Apply(p, (p.Tag as LineInfo)?.InCodeBlock ?? false);
+    }
+
+    private static void ApplyTableLook(Paragraph p, TableRole role, bool isLast)
+    {
+        p.FontSize = Theme.BaseSize - 1.5;
+        p.LineHeight = 24;
+        p.TextAlignment = TextAlignment.Left;
+
+        // Umbrochene Zeilen rücken ein, damit der Zeilenanfang mit dem Strich erkennbar bleibt.
+        p.Padding = new Thickness(20, 4, 10, 4);
+        p.TextIndent = -14;
+        p.BorderBrush = Theme.TableLine;
+        p.Margin = new Thickness(0, 0, 0, isLast ? 14 : 0);
+
+        switch (role)
+        {
+            case TableRole.Header:
+                p.FontWeight = FontWeights.Bold;
+                p.Foreground = Theme.Heading;
+                p.Background = Theme.TableHeaderBg;
+                p.BorderThickness = new Thickness(0, 1, 0, 0);
+                p.Margin = new Thickness(0, 8, 0, 0);
+                break;
+
+            case TableRole.Delimiter:
+                // Muss im Text stehen, soll aber nicht mitlesen: klein, blass, als Linie unter dem Kopf.
+                p.FontSize = 7;
+                p.LineHeight = 9;
+                p.Foreground = Theme.Marker;
+                p.Background = Theme.TableHeaderBg;
+                p.Padding = new Thickness(20, 0, 10, 1);
+                p.BorderBrush = Theme.Rule;
+                p.BorderThickness = new Thickness(0, 0, 0, 1);
+                break;
+
+            default:
+                p.BorderThickness = new Thickness(0, 0, 0, 1);
+                break;
+        }
+    }
+
+    /// <summary>Zellen einzeln auszeichnen, die Striche dazwischen treten zurück.</summary>
+    private static IEnumerable<Inline> BuildTableRow(string text, Brush baseBrush)
+    {
+        var result = new List<Inline>();
+        string[] cells = RxCellSplit.Split(text);
+        for (int i = 0; i < cells.Length; i++)
+        {
+            if (i > 0) result.Add(Make("|", Theme.Marker, weight: FontWeights.Normal));
+            if (cells[i].Length > 0) result.AddRange(BuildInline(cells[i], baseBrush));
+        }
+        return result;
+    }
 
     public static string GetText(Paragraph paragraph)
     {
@@ -67,6 +214,15 @@ public static class MarkdownStyler
         {
             ApplyCodeBlockLook(paragraph);
             inlines.Add(Make(text, Theme.Code));
+        }
+        else if ((info.LooksTable = LooksLikeTableRow(text)) && RoleOf(paragraph, info, out bool isLast) is { } role)
+        {
+            info.IsTable = true;
+            ApplyTableLook(paragraph, role, isLast);
+            if (role == TableRole.Delimiter)
+                inlines.Add(Make(text, Theme.Marker));
+            else
+                inlines.AddRange(BuildTableRow(text, role == TableRole.Header ? Theme.Heading : Theme.Text));
         }
         else if (RxRule.IsMatch(text))
         {
@@ -130,6 +286,7 @@ public static class MarkdownStyler
         p.BorderThickness = new Thickness(0);
         p.BorderBrush = null;
         p.TextAlignment = TextAlignment.Left;
+        p.TextIndent = 0;
     }
 
     private static void ApplyCodeBlockLook(Paragraph p)

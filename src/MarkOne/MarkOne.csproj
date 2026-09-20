@@ -10,7 +10,7 @@
     <RootNamespace>MarkOne</RootNamespace>
     <ApplicationTitle>MarkOne</ApplicationTitle>
     <ApplicationIcon>../../assets/icon/markone.ico</ApplicationIcon>
-    <Version>0.4.0</Version>
+    <Version>0.5.0</Version>
     <SelfContained>false</SelfContained>
     <!-- Nur 64-Bit-Windows: so landet genau eine pdfium.dll neben der EXE statt drei. -->
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>

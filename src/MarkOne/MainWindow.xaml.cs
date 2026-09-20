@@ -27,6 +27,8 @@ public partial class MainWindow : Window
         new("Als PDF exportieren", nameof(ExportPdfCommand), typeof(MainWindow));
     public static readonly RoutedUICommand ExportHtmlCommand =
         new("Als HTML exportieren", nameof(ExportHtmlCommand), typeof(MainWindow));
+    public static readonly RoutedUICommand TogglePreviewCommand =
+        new("Lesevorschau ein/aus", nameof(TogglePreviewCommand), typeof(MainWindow));
 
     private static readonly Regex RxWord = new(@"[\p{L}\p{N}'’\-]+", RegexOptions.Compiled);
     private static readonly Encoding Utf8NoBom = new UTF8Encoding(false);
@@ -67,7 +69,9 @@ public partial class MainWindow : Window
         Tree.ItemsSource = _roots;
         Images.StatusChanged += (_, _) => { if (_pane == Pane.Image) StatusCount.Text = Images.Status; };
         Pdfs.StatusChanged += (_, _) => { if (_pane == Pane.Pdf) StatusCount.Text = Pdfs.Status; };
-        Html.StatusChanged += (_, _) => { if (_pane == Pane.Html) StatusCount.Text = Html.Status; };
+        Html.StatusChanged += (_, _) => { if (_pane is Pane.Html or Pane.Preview) StatusCount.Text = Html.Status; };
+        Html.CloseRequested += (_, _) => _ = LeavePreviewAsync();
+        Html.LocalLinkClicked += (_, path) => OnPreviewLink(path);
 
         DataObject.AddPastingHandler(Editor, OnPaste);
 
@@ -190,7 +194,8 @@ public partial class MainWindow : Window
         }
 
         int offset = OffsetInParagraph(p, Editor.CaretPosition);
-        MarkdownStyler.Apply(p, info?.InCodeBlock ?? false);
+
+        MarkdownStyler.ApplyAtCaret(p);   // zieht bei Bedarf die Tabelle drumherum mit
         Editor.CaretPosition = PointerAtOffset(p, offset);
     }
 
@@ -288,18 +293,24 @@ public partial class MainWindow : Window
 
     // ================================================================ Befehle
 
-    /// <summary>Speichern, Suchen und Co. gibt es nur, solange der Editor zu sehen ist.</summary>
+    /// <summary>Suchen und Ersetzen gibt es nur, solange der Editor zu sehen ist.</summary>
     private void CanEdit(object sender, CanExecuteRoutedEventArgs e) => e.CanExecute = IsEditing;
 
+    /// <summary>Speichern, Exportieren und die Vorschau brauchen nur das Dokument, nicht den sichtbaren Editor.</summary>
+    private void CanSave(object sender, CanExecuteRoutedEventArgs e) => e.CanExecute = HasDocument;
+
     private void CanSaveVersion(object sender, CanExecuteRoutedEventArgs e) =>
-        e.CanExecute = IsEditing && _path is not null;
+        e.CanExecute = HasDocument && _path is not null;
 
     /// <summary>Ob rechts gerade der Editor steht (und nicht ein Betrachter).</summary>
     private bool IsEditing => _pane == Pane.Editor;
 
+    /// <summary>Ob rechts das Dokument zu sehen ist, als Quelltext oder als Lesevorschau.</summary>
+    private bool HasDocument => _pane is Pane.Editor or Pane.Preview;
+
     // ============================================================ Betrachter
 
-    private enum Pane { Editor, Image, Pdf, Html }
+    private enum Pane { Editor, Image, Pdf, Html, Preview }
 
     /// <summary>Welcher Betrachter für eine Dateiart zuständig ist; null heißt Editor oder Fremdprogramm.</summary>
     private static Pane? PaneFor(FileKind kind) => kind switch
@@ -324,11 +335,84 @@ public partial class MainWindow : Window
             Pdfs.Clear();
             Html.Clear();
             Editor.Visibility = Visibility.Visible;
+            SyncPreviewButton();
             UpdateTitle();
             UpdateWordCount();
             CommandManager.InvalidateRequerySuggested();
         }
         Editor.Focus();
+    }
+
+    // ========================================================== Lesevorschau
+
+    /// <summary>Der Knopf sagt, wohin er führt: in die Vorschau oder zurück in den Editor.</summary>
+    private void SyncPreviewButton()
+    {
+        bool preview = _pane == Pane.Preview;
+        ButtonPreview.Content = preview ? "Editor" : "Vorschau";
+        ButtonPreview.Tag = preview ? "" : "";
+    }
+
+    private void OnTogglePreview(object sender, ExecutedRoutedEventArgs e)
+    {
+        if (_pane == Pane.Preview) _ = LeavePreviewAsync();
+        else ShowPreview();
+    }
+
+    /// <summary>Zeigt das Dokument fertig gesetzt, an der Stelle, an der im Editor gelesen wurde.</summary>
+    private void ShowPreview()
+    {
+        double range = Editor.ExtentHeight - Editor.ViewportHeight;
+        double ratio = range > 0 ? Math.Clamp(Editor.VerticalOffset / range, 0, 1) : 0;
+
+        _pane = Pane.Preview;
+        _viewPath = null;
+        Editor.Visibility = Visibility.Collapsed;
+        Images.Visibility = Visibility.Collapsed;
+        Pdfs.Visibility = Visibility.Collapsed;
+        Images.Clear();
+        Pdfs.Clear();
+        Html.Visibility = Visibility.Visible;
+
+        string markdown = GetDocumentText();
+        string stem = _path is null ? "Unbenannt" : Path.GetFileNameWithoutExtension(_path);
+        Html.LoadMarkdown(markdown, _path, MarkdownExport.Title(markdown, stem), ratio);
+        Html.Focus();
+
+        SyncPreviewButton();
+        UpdateTitle();
+        CommandManager.InvalidateRequerySuggested();
+    }
+
+    /// <summary>Zurück in den Editor, an die Stelle, bis zu der in der Vorschau gelesen wurde.</summary>
+    private async Task LeavePreviewAsync()
+    {
+        if (_pane != Pane.Preview) return;
+        double ratio = await Html.GetScrollRatioAsync();
+        if (_pane != Pane.Preview) return;   // inzwischen wurde etwas anderes geöffnet
+
+        ShowEditor();
+        Editor.UpdateLayout();
+        double range = Editor.ExtentHeight - Editor.ViewportHeight;
+        if (range > 0) Editor.ScrollToVerticalOffset(ratio * range);
+    }
+
+    /// <summary>Ein Link in der Vorschau zeigt auf eine Datei daneben.</summary>
+    private void OnPreviewLink(string path)
+    {
+        if (_pane != Pane.Preview) return;
+        var kind = FileScanner.KindOf(path);
+
+        if (PaneFor(kind) is { } pane)
+        {
+            DeselectTree();
+            ShowViewer(pane, path);
+        }
+        else if (kind == FileKind.Markdown && ConfirmDiscard())
+        {
+            ClearTreeSelection();
+            LoadDocument(path);
+        }
     }
 
     private void ShowViewer(Pane pane, string path)
@@ -339,6 +423,8 @@ public partial class MainWindow : Window
         Images.Visibility = pane == Pane.Image ? Visibility.Visible : Visibility.Collapsed;
         Pdfs.Visibility = pane == Pane.Pdf ? Visibility.Visible : Visibility.Collapsed;
         Html.Visibility = pane == Pane.Html ? Visibility.Visible : Visibility.Collapsed;
+
+        SyncPreviewButton();
 
         // Die anderen Betrachter geben ihren Speicher ab.
         if (pane != Pane.Image) Images.Clear();
@@ -406,7 +492,8 @@ public partial class MainWindow : Window
         }
 
         string name = _path is null ? "Unbenannt" : Path.GetFileName(_path);
-        Title = (_dirty ? "• " : "") + name + "  —  MarkOne";
+        string mode = _pane == Pane.Preview ? "  —  Vorschau" : "";
+        Title = (_dirty ? "• " : "") + name + mode + "  —  MarkOne";
         StatusFile.Text = _path ?? "Unbenannt";
     }
 

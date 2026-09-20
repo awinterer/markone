@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
@@ -23,6 +24,16 @@ public partial class HtmlViewer : UserControl
     public string Status { get; private set; } = "";
     public event EventHandler? StatusChanged;
 
+    /// <summary>In der Lesevorschau wurde ein Link auf eine lokale Datei angeklickt.</summary>
+    public event EventHandler<string>? LocalLinkClicked;
+
+    /// <summary>Esc in der Lesevorschau: zurück zum Editor.</summary>
+    public event EventHandler? CloseRequested;
+
+    private bool _preview;          // zeigt gerade die Lesevorschau eines Markdown-Dokuments
+    private double _scrollRatio;    // Lesestelle aus dem Editor, 0 bis 1
+    private string? _assetRoot;
+
     private WebView2? _web;
     private Task? _ready;
     private string? _path;
@@ -39,10 +50,73 @@ public partial class HtmlViewer : UserControl
 
     // ================================================================ Laden
 
+    /// <summary>
+    /// Lesevorschau: das Markdown fertig gesetzt, mit derselben Umwandlung wie der Export.
+    /// <paramref name="scrollRatio"/> ist die Lesestelle im Editor (0 oben, 1 unten).
+    /// </summary>
+    public async void LoadMarkdown(string markdown, string? sourcePath, string title, double scrollRatio)
+    {
+        int id = ++_loadId;
+        _path = sourcePath;
+        _preview = true;
+        _scrollRatio = scrollRatio;
+        ShowMessage(null);
+        SetStatus("Lesevorschau …");
+
+        try
+        {
+            var page = MarkdownExport.WritePage(markdown, sourcePath is null ? null : Path.GetDirectoryName(sourcePath),
+                title, HtmlStyle.Screen(), "preview.html");
+            _assetRoot = page.AssetRoot;
+
+            _ready ??= InitAsync();
+            await _ready;
+            if (id != _loadId || _web?.CoreWebView2 is null) return;
+
+            var core = _web.CoreWebView2;
+            core.SetVirtualHostNameToFolderMapping(MarkdownExport.ExportHost, MarkdownExport.TempFolder, CoreWebView2HostResourceAccessKind.Allow);
+            core.SetVirtualHostNameToFolderMapping(MarkdownExport.AssetHost, page.AssetRoot, CoreWebView2HostResourceAccessKind.Allow);
+            core.Navigate(page.Url);
+        }
+        catch (WebView2RuntimeNotFoundException)
+        {
+            if (id != _loadId) return;
+            _ready = null;
+            ShowMessage("Die WebView2-Laufzeit von Microsoft Edge fehlt auf diesem Rechner; ohne sie gibt es keine Lesevorschau.");
+            SetStatus("");
+        }
+        catch (Exception ex)
+        {
+            if (id != _loadId) return;
+            _ready = null;
+            ShowMessage("Die Lesevorschau konnte nicht aufgebaut werden.\n\n" + ex.Message);
+            SetStatus("");
+        }
+    }
+
+    /// <summary>Wie weit wurde in der Seite gelesen? 0 oben, 1 unten. Wartet höchstens eine halbe Sekunde.</summary>
+    public async Task<double> GetScrollRatioAsync()
+    {
+        try
+        {
+            if (_web?.CoreWebView2 is null) return 0;
+            var script = _web.CoreWebView2.ExecuteScriptAsync(
+                "(function(){var m=document.documentElement.scrollHeight-window.innerHeight;return m>0?window.scrollY/m:0;})()");
+            if (await Task.WhenAny(script, Task.Delay(500)) != script) return 0;
+            return double.TryParse(script.Result, NumberStyles.Float, CultureInfo.InvariantCulture, out double ratio)
+                ? Math.Clamp(ratio, 0, 1) : 0;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
     public async void Load(string path)
     {
         int id = ++_loadId;
         _path = path;
+        _preview = false;
         ShowMessage(null);
         SetStatus("wird geladen …");
 
@@ -77,6 +151,7 @@ public partial class HtmlViewer : UserControl
     {
         _loadId++;
         _path = null;
+        _preview = false;
         _ready = null;
         if (_web is not null)
         {
@@ -113,7 +188,7 @@ public partial class HtmlViewer : UserControl
         core.NavigationStarting += OnNavigating;
         core.NewWindowRequested += (_, e) => { e.Handled = true; OpenOutside(e.Uri); };
         core.DownloadStarting += (_, e) => e.Cancel = true;
-        core.NavigationCompleted += (_, _) => UpdateStatus();
+        core.NavigationCompleted += (_, _) => { RestoreReadingPosition(); UpdateStatus(); };
         core.DocumentTitleChanged += (_, _) => UpdateStatus();
         web.ZoomFactorChanged += (_, _) => UpdateStatus();
 
@@ -131,6 +206,21 @@ public partial class HtmlViewer : UserControl
     {
         if (e.Uri == "about:blank") return;
         if (!Uri.TryCreate(e.Uri, UriKind.Absolute, out var uri)) { e.Cancel = true; return; }
+
+        // Die Lesevorschau selbst.
+        if (uri.Scheme == Uri.UriSchemeHttps && uri.Host == MarkdownExport.ExportHost) return;
+
+        // Ein Link aus der Lesevorschau auf eine Datei daneben: MarkOne öffnet sie selbst.
+        if (uri.Scheme == Uri.UriSchemeHttps && uri.Host == MarkdownExport.AssetHost)
+        {
+            e.Cancel = true;
+            if (_assetRoot is null) return;
+            string relative = Uri.UnescapeDataString(uri.AbsolutePath).TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
+            string local = Path.GetFullPath(Path.Combine(_assetRoot, relative));
+            if (File.Exists(local))
+                Dispatcher.BeginInvoke(new Action(() => LocalLinkClicked?.Invoke(this, local)));   // erst nach dem Ereignis der Engine
+            return;
+        }
 
         if (uri.IsFile)
         {
@@ -157,8 +247,24 @@ public partial class HtmlViewer : UserControl
 
     // ================================================================= Zoom
 
+    private void RestoreReadingPosition()
+    {
+        if (!_preview || _scrollRatio <= 0 || _web?.CoreWebView2 is null) return;
+        string ratio = _scrollRatio.ToString("0.####", CultureInfo.InvariantCulture);
+        _ = _web.CoreWebView2.ExecuteScriptAsync(
+            $"window.scrollTo(0,{ratio}*(document.documentElement.scrollHeight-window.innerHeight));");
+        _scrollRatio = 0;
+    }
+
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.Escape && _preview)
+        {
+            e.Handled = true;
+            CloseRequested?.Invoke(this, EventArgs.Empty);
+            return;
+        }
+
         if (_web is null || (Keyboard.Modifiers & ModifierKeys.Control) == 0) return;
         switch (e.Key)
         {
@@ -190,7 +296,13 @@ public partial class HtmlViewer : UserControl
 
     private void UpdateStatus()
     {
-        if (_web?.CoreWebView2 is null || _path is null) return;
+        if (_web?.CoreWebView2 is null) return;
+        if (_preview)
+        {
+            SetStatus($"Lesevorschau  ·  {_web.ZoomFactor:P0}");
+            return;
+        }
+        if (_path is null) return;
         string title = _web.CoreWebView2.DocumentTitle ?? "";
         string name = Path.GetFileName(_path);
         string head = title.Length > 0 && !string.Equals(title, name, StringComparison.OrdinalIgnoreCase)

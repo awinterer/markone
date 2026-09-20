@@ -79,20 +79,22 @@
         <KeyBinding Key="H" Modifiers="Ctrl" Command="ApplicationCommands.Replace" />
         <KeyBinding Key="F5" Command="{x:Static local:MainWindow.RefreshTreeCommand}" />
         <KeyBinding Key="P" Modifiers="Ctrl+Shift" Command="{x:Static local:MainWindow.ExportPdfCommand}" />
+        <KeyBinding Key="V" Modifiers="Ctrl+Shift" Command="{x:Static local:MainWindow.TogglePreviewCommand}" />
     </Window.InputBindings>
 
     <Window.CommandBindings>
         <CommandBinding Command="ApplicationCommands.New" Executed="OnNew" />
         <CommandBinding Command="ApplicationCommands.Open" Executed="OnOpen" />
-        <CommandBinding Command="ApplicationCommands.Save" Executed="OnSave" CanExecute="CanEdit" />
-        <CommandBinding Command="ApplicationCommands.SaveAs" Executed="OnSaveAs" CanExecute="CanEdit" />
+        <CommandBinding Command="ApplicationCommands.Save" Executed="OnSave" CanExecute="CanSave" />
+        <CommandBinding Command="ApplicationCommands.SaveAs" Executed="OnSaveAs" CanExecute="CanSave" />
         <CommandBinding Command="ApplicationCommands.Find" Executed="OnFind" CanExecute="CanEdit" />
         <CommandBinding Command="ApplicationCommands.Replace" Executed="OnReplace" CanExecute="CanEdit" />
         <CommandBinding Command="{x:Static local:MainWindow.OpenFolderCommand}" Executed="OnOpenFolder" />
         <CommandBinding Command="{x:Static local:MainWindow.SaveVersionCommand}" Executed="OnSaveVersion" CanExecute="CanSaveVersion" />
         <CommandBinding Command="{x:Static local:MainWindow.RefreshTreeCommand}" Executed="OnRefreshTree" />
-        <CommandBinding Command="{x:Static local:MainWindow.ExportPdfCommand}" Executed="OnExportPdf" CanExecute="CanEdit" />
-        <CommandBinding Command="{x:Static local:MainWindow.ExportHtmlCommand}" Executed="OnExportHtml" CanExecute="CanEdit" />
+        <CommandBinding Command="{x:Static local:MainWindow.ExportPdfCommand}" Executed="OnExportPdf" CanExecute="CanSave" />
+        <CommandBinding Command="{x:Static local:MainWindow.ExportHtmlCommand}" Executed="OnExportHtml" CanExecute="CanSave" />
+        <CommandBinding Command="{x:Static local:MainWindow.TogglePreviewCommand}" Executed="OnTogglePreview" CanExecute="CanSave" />
     </Window.CommandBindings>
 
     <DockPanel>
@@ -125,6 +127,8 @@
                         <MenuItem Header="_Ersetzen…" Command="ApplicationCommands.Replace" InputGestureText="Strg+H" />
                     </MenuItem>
                     <MenuItem Header="_Ansicht">
+                        <MenuItem Header="_Lesevorschau ein/aus" Command="{x:Static local:MainWindow.TogglePreviewCommand}" InputGestureText="Strg+Umschalt+V" />
+                        <Separator />
                         <MenuItem Header="Navigation _aktualisieren" Command="{x:Static local:MainWindow.RefreshTreeCommand}" InputGestureText="F5" />
                         <MenuItem x:Name="MenuShowTree" Header="Navigation an_zeigen" IsCheckable="True" IsChecked="True" Click="OnToggleTree" />
                         <MenuItem x:Name="MenuAllFiles" Header="Alle _Dateien anzeigen" IsCheckable="True" IsChecked="True" Click="OnToggleAllFiles"
@@ -158,6 +162,9 @@
                     <Button Style="{StaticResource ToolButton}" Tag="&#xE721;" Content="Suchen"
                             Command="ApplicationCommands.Find" ToolTip="Suchen und Ersetzen (Strg+F)" />
                     <Rectangle Style="{StaticResource ToolSeparator}" />
+                    <Button x:Name="ButtonPreview" Style="{StaticResource ToolButton}" Tag="&#xE890;" Content="Vorschau"
+                            Command="{x:Static local:MainWindow.TogglePreviewCommand}"
+                            ToolTip="Lesevorschau: das Dokument fertig gesetzt, mit Tabellen und Bildern (Strg+Umschalt+V, zurück auch mit Esc)" />
                     <Button Style="{StaticResource ToolButton}" Tag="&#xE7C3;" Content="PDF"
                             Command="{x:Static local:MainWindow.ExportPdfCommand}"
                             ToolTip="Das Dokument als PDF exportieren (Strg+Umschalt+P)" />

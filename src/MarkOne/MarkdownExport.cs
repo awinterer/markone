@@ -14,7 +14,7 @@ namespace MarkOne;
 /// Markdown nach HTML und PDF. Die Umwandlung übernimmt Markdig (CommonMark
 /// plus Tabellen, Fußnoten, Aufgabenlisten). Für das PDF baut die Edge-Engine
 /// die Seite unsichtbar auf und druckt sie in eine Datei; danach wird sie
-/// wieder beendet.
+/// wieder beendet. Die Lesevorschau im Fenster benutzt dieselbe Seite.
 /// </summary>
 public static class MarkdownExport
 {
@@ -32,11 +32,14 @@ public static class MarkdownExport
     private static readonly Regex RxSpacedLink = new(@"(!?\[[^\]\n]*\])\(([^()<>\n]*?[ ][^()<>\n]*?)\)", RegexOptions.Compiled);
     private static readonly Encoding Utf8NoBom = new UTF8Encoding(false);
 
-    private const string ExportHost = "markone.export";   // die erzeugte Seite
-    private const string AssetHost = "markone.assets";    // der Ordner der Markdown-Datei, für Bilder
+    internal const string ExportHost = "markone.export";   // die erzeugte Seite
+    internal const string AssetHost = "markone.assets";    // das Laufwerk der Markdown-Datei, für Bilder
 
-    private static readonly string TempFolder = Path.Combine(
+    internal static readonly string TempFolder = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MarkOne", "export");
+
+    /// <summary>Eine fertig geschriebene Seite: ihre Adresse und das Laufwerk, das für Bilder eingeblendet wird.</summary>
+    internal sealed record Page(string Url, string AssetRoot);
 
     /// <summary>Die erste Überschrift erster Ordnung, sonst der Vorschlag.</summary>
     public static string Title(string markdown, string fallback)
@@ -85,15 +88,14 @@ public static class MarkdownExport
         File.WriteAllText(htmlPath, ToHtml(markdown, title, HtmlStyle.Screen()), Utf8NoBom);
 
     /// <summary>
-    /// Erzeugt das PDF. <paramref name="sourceFolder"/> ist der Ordner der Markdown-Datei,
-    /// gegen den relative Bildpfade aufgelöst werden. Liefert null bei Erfolg, sonst den Fehler in Worten.
+    /// Schreibt die Seite für die Engine in den Zwischenordner. Bilder liegen gern auch eine
+    /// Ebene höher ("../Bilder/x.png"); deshalb wird das ganze Laufwerk eingeblendet und die
+    /// Seite auf den Ordner der Markdown-Datei verankert.
     /// </summary>
-    public static async Task<string?> ToPdfAsync(string markdown, string? sourceFolder, string title, string pdfPath, IntPtr ownerHwnd)
+    internal static Page WritePage(string markdown, string? sourceFolder, string title, string css, string fileName)
     {
         Directory.CreateDirectory(TempFolder);
 
-        // Bilder liegen gern auch eine Ebene höher ("../Bilder/x.png"). Deshalb wird das
-        // ganze Laufwerk eingeblendet und die Seite auf den Ordner der Datei verankert.
         string assetRoot = TempFolder;
         string baseHref = $"https://{AssetHost}/";
         if (sourceFolder is not null && Path.GetPathRoot(sourceFolder) is { Length: > 0 } root)
@@ -104,8 +106,19 @@ public static class MarkdownExport
                 baseHref += string.Join("/", relative.Split('/').Select(Uri.EscapeDataString)) + "/";
         }
 
-        string html = ToHtml(markdown, title, HtmlStyle.Print(), baseHref);
-        File.WriteAllText(Path.Combine(TempFolder, "print.html"), html, Utf8NoBom);
+        File.WriteAllText(Path.Combine(TempFolder, fileName), ToHtml(markdown, title, css, baseHref), Utf8NoBom);
+
+        // Die Zeitmarke hält die Engine davon ab, eine ältere Fassung aus ihrem Zwischenspeicher zu nehmen.
+        return new Page($"https://{ExportHost}/{fileName}?t={DateTime.UtcNow.Ticks}", assetRoot);
+    }
+
+    /// <summary>
+    /// Erzeugt das PDF. <paramref name="sourceFolder"/> ist der Ordner der Markdown-Datei,
+    /// gegen den relative Bildpfade aufgelöst werden. Liefert null bei Erfolg, sonst den Fehler in Worten.
+    /// </summary>
+    public static async Task<string?> ToPdfAsync(string markdown, string? sourceFolder, string title, string pdfPath, IntPtr ownerHwnd)
+    {
+        var page = WritePage(markdown, sourceFolder, title, HtmlStyle.Print(), "print.html");
 
         CoreWebView2Environment environment;
         try
@@ -126,11 +139,11 @@ public static class MarkdownExport
             var core = controller.CoreWebView2;
             core.Settings.AreDefaultScriptDialogsEnabled = false;
             core.SetVirtualHostNameToFolderMapping(ExportHost, TempFolder, CoreWebView2HostResourceAccessKind.Allow);
-            core.SetVirtualHostNameToFolderMapping(AssetHost, assetRoot, CoreWebView2HostResourceAccessKind.Allow);
+            core.SetVirtualHostNameToFolderMapping(AssetHost, page.AssetRoot, CoreWebView2HostResourceAccessKind.Allow);
 
             var loaded = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             core.NavigationCompleted += (_, e) => loaded.TrySetResult(e.IsSuccess);
-            core.Navigate($"https://{ExportHost}/print.html");
+            core.Navigate(page.Url);
 
             var finished = await Task.WhenAny(loaded.Task, Task.Delay(TimeSpan.FromSeconds(30)));
             if (finished != loaded.Task) return "Die Seite wurde nach 30 Sekunden nicht fertig.";

@@ -77,6 +77,10 @@ public static class Theme
     public static readonly SolidColorBrush ScrollThumb = Frozen("#CDC6B9");
     public static readonly SolidColorBrush ScrollThumbHover = Frozen("#A9A296");
 
+    // --- Farben: Tabellen im Editor ---------------------------------------
+    public static readonly SolidColorBrush TableHeaderBg = Frozen("#F4F0E8");
+    public static readonly SolidColorBrush TableLine = Frozen("#E6E1D6");
+
     // --- Farben: Betrachter für Bilder und PDF ---------------------------
     public static readonly SolidColorBrush ViewerBg = Frozen("#E4DFD5");        // dunkler als der Rahmen, damit Seiten und Bilder tragen
     public static readonly SolidColorBrush PageBorder = Frozen("#CFC9BE");

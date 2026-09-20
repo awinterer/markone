@@ -77,6 +77,17 @@ Der Editor bleibt im Hintergrund erhalten, solange ein Bild, PDF oder HTML
 zu sehen ist. Ein Klick auf die offene Markdown-Datei holt ihn ohne Neuladen
 zurück. Speichern, Suchen und Versionen sind in der Zeit abgeschaltet.
 
+**Lesevorschau.** Der Knopf *Vorschau* in der Kopfzeile oder
+Strg+Umschalt+V zeigt das Dokument fertig gesetzt: Tabellen mit Spalten,
+Bilder, Fußnoten, Aufgabenlisten. Dahinter steht dieselbe Umwandlung wie beim
+Export, der aktuelle Text zählt, auch ungespeichert. Die Vorschau öffnet an
+der Stelle, an der im Editor gelesen wurde, und der Weg zurück landet dort,
+bis wohin in der Vorschau gelesen wurde. Zurück geht es mit demselben Knopf,
+der dann *Editor* heißt, mit demselben Kürzel oder mit Esc. Links auf andere
+Notizen, Bilder und PDF öffnet MarkOne selbst, Links ins Netz der Browser.
+Die Vorschau benutzt die Edge-Engine wie der HTML-Betrachter und kostet
+dasselbe: rund 350 MB Arbeitsspeicher, solange sie offen ist, danach nichts.
+
 **Export nach PDF und HTML.** Über *Datei*, den Knopf *PDF* in der
 Kopfzeile, Strg+Umschalt+P oder per Rechtsklick auf eine Markdown-Datei im
 Baum. Der Editor exportiert den aktuellen Text, auch ungespeichert; der Baum
@@ -147,6 +158,7 @@ dist\MarkOne.exe pfad\zur\datei.md
 | `Strg+F` | Suchen |
 | `Strg+H` | Ersetzen |
 | `Strg+Umschalt+P` | Als PDF exportieren |
+| `Strg+Umschalt+V` | Lesevorschau ein und aus, zurück auch mit `Esc` |
 | `Strg+Z` / `Strg+Y` | Rückgängig / Wiederholen |
 | `F5` | Navigation neu einlesen |
 | `Enter` / Doppelklick im Baum | Datei im zugehörigen Programm öffnen |
@@ -168,6 +180,15 @@ Im Bild- und PDF-Betrachter:
 Überschriften `#` bis `######`, **fett**, _kursiv_, `Code`, ~~durchgestrichen~~,
 Links, Zitate `>`, Aufzählungen und nummerierte Listen, Codeblöcke mit
 dreifachen Backticks, Trennlinien `---`.
+
+**Tabellen** bleiben im Editor Quelltext, werden aber als Block gesetzt: Die
+senkrechten Striche treten zurück, die Kopfzeile ist fett auf leichtem Grund,
+die Trennzeile `|---|---|` schrumpft zur Linie darunter, die Zeilen stehen
+dicht mit einer feinen Linie dazwischen, umbrochene Zeilen rücken ein.
+Auszeichnung wie **fett** gilt je Zelle. Als Tabelle zählt ein Block erst,
+wenn die Trennzeile als zweite Zeile steht; vorher ist es Fließtext, genau
+wie beim Export. Spalten stehen im Quelltext nicht untereinander, dafür gibt
+es die Lesevorschau.
 
 ## Aussehen ändern
 
@@ -248,7 +269,9 @@ Technologiebasis (Win32/C++), nicht ein kleineres Programm.
   mehr Ärger als Nutzen.
 - **Keine verschachtelte Auszeichnung.** `**fett mit _kursiv_ darin**` wird nur
   auf der äußeren Ebene erkannt.
-- **Tabellen** werden nicht besonders dargestellt, nur als normaler Text.
+- **Tabellen** stehen im Editor nicht in Spalten. Jede Zeile ist ein Absatz
+  im Quelltext; die fertige Tabelle zeigen Lesevorschau und Export. Zeilen
+  müssen mit einem senkrechten Strich beginnen, um als Tabelle zu gelten.
 - **Rückgängig** kann in seltenen Fällen einen Formatierungsschritt statt einer
   Texteingabe zurücknehmen — die Neuformatierung landet mit im Undo-Verlauf.
 - **Mehrere Instanzen** teilen sich `settings.json`; beim Schließen gewinnt die
@@ -259,8 +282,9 @@ Technologiebasis (Win32/C++), nicht ein kleineres Programm.
   eingepasste Seite rund 15 MB Arbeitsspeicher, gehalten werden die
   sichtbaren Seiten plus je eine davor und danach.
 - **Bilder:** animierte GIFs zeigen das erste Bild, SVG wird nicht dargestellt.
-- **HTML:** Tastenkürzel von MarkOne greifen nicht, solange die Seite den
-  Fokus hat; erst wieder nach einem Klick in Baum oder Kopfzeile.
+- **HTML und Lesevorschau:** Ob Tastenkürzel von MarkOne greifen, solange
+  die Seite selbst den Fokus hat, ist nicht geprüft; der Knopf in der
+  Kopfzeile geht immer.
 - **Export:** Bilder müssen auf demselben Laufwerk liegen und relativ oder
   ohne `file://` angegeben sein; Formeln und Diagramme werden nicht gesetzt.
   Der PDF-Export braucht die WebView2-Laufzeit von Windows 11 und dauert
